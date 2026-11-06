@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Danh sách hồ sơ khám sức khỏe</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --medical-primary: #0d6efd;
+      --medical-secondary: #20c997;
+      --medical-light: #e8f4fd;
+      --medical-dark: #0a4d8c;
+      --medical-bg: #f0f7fb;
+      --medical-card: #ffffff;
+      --medical-accent: #0dcaf0;
+    }
+
+    body {
+      background-color: var(--medical-bg);
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      color: #2c3e50;
+    }
+
+    .navbar-medical {
+      background: linear-gradient(135deg, var(--medical-dark), var(--medical-primary));
+      box-shadow: 0 2px 12px rgba(13, 110, 253, 0.25);
+    }
+
+    .profile-header {
+      background: linear-gradient(135deg, #ffffff 0%, var(--medical-light) 100%);
+      border-radius: 16px;
+      border: 1px solid rgba(13, 110, 253, 0.12);
+      box-shadow: 0 4px 20px rgba(13, 110, 253, 0.08);
+    }
+
+    .avatar-circle {
+      width: 100px;
+      height: 100px;
+      background: linear-gradient(135deg, var(--medical-primary), var(--medical-secondary));
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 2.5rem;
+      box-shadow: 0 6px 16px rgba(13, 110, 253, 0.3);
+      border: 4px solid white;
+    }
+
+    .badge-medical {
+      background: var(--medical-light);
+      color: var(--medical-dark);
+      font-weight: 500;
+      padding: 0.4em 0.8em;
+    }
+
+    .filter-card {
+      background: var(--medical-card);
+      border-radius: 14px;
+      border: none;
+      box-shadow: 0 3px 15px rgba(0, 0, 0, 0.06);
+    }
+
+    .filter-card .form-label {
+      font-weight: 600;
+      font-size: 0.85rem;
+      color: var(--medical-dark);
+      margin-bottom: 0.35rem;
+    }
+
+    .btn-medical {
+      background: linear-gradient(135deg, var(--medical-primary), #0b5ed7);
+      border: none;
+      color: white;
+      font-weight: 500;
+      border-radius: 8px;
+    }
+
+    .btn-medical:hover {
+      background: linear-gradient(135deg, #0b5ed7, var(--medical-dark));
+      color: white;
+    }
+
+    .btn-outline-medical {
+      border: 1.5px solid var(--medical-primary);
+      color: var(--medical-primary);
+      font-weight: 500;
+      border-radius: 8px;
+    }
+
+    .btn-outline-medical:hover {
+      background: var(--medical-primary);
+      color: white;
+    }
+
+    .table-medical thead {
+      background: linear-gradient(135deg, var(--medical-dark), var(--medical-primary));
+      color: #ffffff;
+    }
+
+    .table-medical th {
+      font-weight: 600;
+      border-bottom: none;
+      white-space: nowrap;
+      padding-top: 0.9rem;
+      padding-bottom: 0.9rem;
+    }
+
+    .table-medical tbody tr {
+      transition: background-color 0.15s ease;
+      cursor: pointer;
+    }
+
+    .table-medical tbody tr:hover {
+      background-color: var(--medical-light);
+    }
+
+    .badge-specialty {
+      font-weight: 500;
+      padding: 0.35em 0.75em;
+    }
+
+    .status-done {
+      background-color: #d1e7dd;
+      color: #0f5132;
+    }
+
+    .status-pending {
+      background-color: #fff3cd;
+      color: #664d03;
+    }
+
+    .status-cancelled {
+      background-color: #f8d7da;
+      color: #842029;
+    }
+
+    .pagination .page-link {
+      color: var(--medical-primary);
+      border-radius: 8px;
+      margin: 0 3px;
+      border: 1px solid #dee2e6;
+    }
+
+    .pagination .page-item.active .page-link {
+      background: var(--medical-primary);
+      border-color: var(--medical-primary);
+      color: white;
+    }
+
+    .pagination .page-link:hover {
+      background: var(--medical-light);
+      color: var(--medical-dark);
+    }
+
+    footer {
+      background: var(--medical-dark);
+      color: rgba(255, 255, 255, 0.85);
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg navbar-dark navbar-medical sticky-top">
+    <div class="container">
+      <a class="navbar-brand fw-bold" href="#">
+        <i class="bi bi-heart-pulse-fill me-2"></i>MediCare Profile
+      </a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav ms-auto">
+          <li class="nav-item"><a class="nav-link" href="#"><i class="bi bi-person-vcard me-1"></i> Hồ sơ BN</a></li>
+          <li class="nav-item"><a class="nav-link active" href="#"><i class="bi bi-clipboard2-pulse me-1"></i> Lịch sử khám</a></li>
+          <li class="nav-item"><a class="nav-link" href="#"><i class="bi bi-calendar-check me-1"></i> Lịch hẹn</a></li>
+          <li class="nav-item"><a class="nav-link" href="#"><i class="bi bi-file-earmark-medical me-1"></i> Kết quả</a></li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container py-4">
+
+    <!-- Thông tin bệnh nhân -->
+    <div class="profile-header p-4 mb-4">
+      <div class="row align-items-center">
+        <div class="col-auto">
+          <div class="avatar-circle">
+            <i class="bi bi-person-fill"></i>
+          </div>
+        </div>
+        <div class="col">
+          <h2 class="mb-1 fw-bold text-dark">Nguyễn Văn An</h2>
+          <p class="mb-2 text-muted">
+            <i class="bi bi-card-text me-1"></i> Mã BN: <strong>BN-2024-08947</strong>
+            <span class="mx-2">|</span>
+            <i class="bi bi-calendar3 me-1"></i> 15/03/1985 (39 tuổi)
+            <span class="mx-2">|</span>
+            <i class="bi bi-gender-male me-1"></i> Nam
+          </p>
+          <div class="d-flex flex-wrap gap-2">
+            <span class="badge badge-medical"><i class="bi bi-droplet-half me-1"></i> Nhóm máu: O+</span>
+            <span class="badge badge-medical"><i class="bi bi-telephone me-1"></i> 0901 234 567</span>
+            <span class="badge badge-medical"><i class="bi bi-geo-alt me-1"></i> Cần Thơ</span>
+            <span class="badge bg-success-subtle text-success"><i class="bi bi-check-circle me-1"></i> Đang theo dõi</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bộ lọc đơn giản -->
+    <div class="card filter-card mb-4">
+      <div class="card-body">
+        <div class="row g-3 align-items-end">
+          <div class="col-md-3 col-sm-6">
+            <label class="form-label">Ngày khám</label>
+            <input type="date" class="form-control" id="filterDate">
+          </div>
+          <div class="col-md-3 col-sm-6">
+            <label class="form-label">Chuyên khoa</label>
+            <select class="form-select" id="filterSpecialty">
+              <option value="">Tất cả</option>
+              <option value="noikhoa">Nội khoa</option>
+              <option value="timmach">Tim mạch</option>
+              <option value="noitiet">Nội tiết</option>
+              <option value="tongquat">Tổng quát</option>
+              <option value="tieuhoa">Tiêu hóa</option>
+              <option value="thankinh">Thần kinh</option>
+            </select>
+          </div>
+          <div class="col-md-4 col-sm-8">
+            <label class="form-label">Tìm kiếm</label>
+            <div class="input-group">
+              <input type="text" class="form-control" placeholder="Mã hồ sơ, bác sĩ..." id="filterSearch">
+              <button class="btn btn-medical" type="button">
+                <i class="bi bi-search"></i>
+              </button>
+            </div>
+          </div>
+          <div class="col-md-2 col-sm-4">
+            <button class="btn btn-outline-secondary w-100">
+              <i class="bi bi-arrow-counterclockwise me-1"></i> Đặt lại
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bảng danh sách hồ sơ -->
+    <div class="card filter-card">
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-medical table-hover mb-0 align-middle">
+            <thead>
+              <tr>
+                <th class="ps-3">Mã hồ sơ</th>
+                <th>Ngày khám</th>
+                <th>Chuyên khoa</th>
+                <th>Bác sĩ</th>
+                <th>Lý do khám</th>
+                <th>Trạng thái</th>
+                <th class="text-end pe-3">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Row 1 -->
+              <tr>
+                <td class="ps-3 fw-semibold text-primary">HS-2026-1042</td>
+                <td>
+                  <div>28/10/2026</div>
+                  <small class="text-muted">08:30</small>
+                </td>
+                <td>
+                  <span class="badge badge-specialty bg-info-subtle text-info">Nội tiết</span>
+                </td>
+                <td>BS. Trần Minh Khoa</td>
+                <td>Tái khám đái tháo đường, điều chỉnh liều thuốc</td>
+                <td>
+                  <span class="badge status-done rounded-pill">Đã hoàn thành</span>
+                </td>
+                <td class="text-end pe-3">
+                  <a href="#" class="btn btn-sm btn-outline-medical" title="Xem chi tiết">
+                    <i class="bi bi-eye"></i> Xem
+                  </a>
+                </td>
+              </tr>
+
+              <!-- Row 2 -->
+              <tr>
+                <td class="ps-3 fw-semibold text-primary">HS-2026-0987</td>
+                <td>
+                  <div>12/09/2026</div>
+                  <small class="text-muted">14:15</small>
+                </td>
+                <td>
+                  <span class="badge badge-specialty bg-danger-subtle text-danger">Tim mạch</span>
+                </td>
+                <td>BS. Lê Hoàng Nam</td>
+                <td>Kiểm tra huyết áp định kỳ, theo dõi Amlodipine</td>
+                <td>
+                  <span class="badge status-done rounded-pill">Đã hoàn thành</span>
+                </td>
+                <td class="text-end pe-3">
+                  <a href="#" class="btn btn-sm btn-outline-medical" title="Xem chi tiết">
+                    <i class="bi bi-eye"></i> Xem
+                  </a>
+                </td>
+              </tr>
+
+              <!-- Row 3 -->
+              <tr>
+                <td class="ps-3 fw-semibold text-primary">HS-2026-0851</td>
+                <td>
+                  <div>05/07/2026</div>
+                  <small class="text-muted">09:00</small>
+                </td>
+                <td>
+                  <span class="badge badge-specialty bg-success-subtle text-success">Tổng quát</span>
+                </td>
+                <td>BS. Phạm Thị Hương</td>
+                <td>Khám sức khỏe định kỳ 6 tháng</td>
+                <td>
+                  <span class="badge status-done rounded-pill">Đã hoàn thành</span>
+                </td>
+                <td class="text-end pe-3">
+                  <a href="#" class="btn btn-sm btn-outline-medical" title="Xem chi tiết">
+                    <i class="bi bi-eye"></i> Xem
+                  </a>
+                </td>
+              </tr>
+
+              <!-- Row 4 -->
+              <tr>
+                <td class="ps-3 fw-semibold text-primary">HS-2026-0723</td>
+                <td>
+                  <div>18/05/2026</div>
+                  <small class="text-muted">10:45</small>
+                </td>
+                <td>
+                  <span class="badge badge-specialty bg-info-subtle text-info">Nội tiết</span>
+                </td>
+                <td>BS. Trần Minh Khoa</td>
+                <td>Kiểm tra HbA1c, tư vấn chế độ ăn</td>
+                <td>
+                  <span class="badge status-done rounded-pill">Đã hoàn thành</span>
+                </td>
+                <td class="text-end pe-3">
+                  <a href="#" class="btn btn-sm btn-outline-medical" title="Xem chi tiết">
+                    <i class="bi bi-eye"></i> Xem
+                  </a>
+                </td>
+              </tr>
+
+              <!-- Row 5 -->
+              <tr>
+                <td class="ps-3 fw-semibold text-primary">HS-2026-0610</td>
+                <td>
+                  <div>22/03/2026</div>
+                  <small class="text-muted">15:30</small>
+                </td>
+                <td>
+                  <span class="badge badge-specialty bg-warning-subtle text-warning">Tiêu hóa</span>
+                </td>
+                <td>BS. Nguyễn Văn Đức</td>
+                <td>Đau thượng vị, nghi viêm dạ dày</td>
+                <td>
+                  <span class="badge status-done rounded-pill">Đã hoàn thành</span>
+                </td>
+                <td class="text-end pe-3">
+                  <a href="#" class="btn btn-sm btn-outline-medical" title="Xem chi tiết">
+                    <i class="bi bi-eye"></i> Xem
+                  </a>
+                </td>
+              </tr>
+
+              <!-- Row 6 -->
+              <tr>
+                <td class="ps-3 fw-semibold text-primary">HS-2026-1105</td>
+                <td>
+                  <div>01/11/2026</div>
+                  <small class="text-muted">07:45</small>
+                </td>
+                <td>
+                  <span class="badge badge-specialty bg-primary-subtle text-primary">Nội khoa</span>
+                </td>
+                <td>BS. Hoàng Thị Lan</td>
+                <td>Khám theo dõi sau xét nghiệm máu</td>
+                <td>
+                  <span class="badge status-pending rounded-pill">Chờ kết quả</span>
+                </td>
+                <td class="text-end pe-3">
+                  <a href="#" class="btn btn-sm btn-outline-medical" title="Xem chi tiết">
+                    <i class="bi bi-eye"></i> Xem
+                  </a>
+                </td>
+              </tr>
+
+              <!-- Row 7 -->
+              <tr>
+                <td class="ps-3 fw-semibold text-primary">HS-2026-0542</td>
+                <td>
+                  <div>10/02/2026</div>
+                  <small class="text-muted">11:00</small>
+                </td>
+                <td>
+                  <span class="badge badge-specialty bg-secondary-subtle text-secondary">Thần kinh</span>
+                </td>
+                <td>BS. Võ Thanh Tùng</td>
+                <td>Đau đầu kéo dài – Bệnh nhân hủy lịch</td>
+                <td>
+                  <span class="badge status-cancelled rounded-pill">Đã hủy</span>
+                </td>
+                <td class="text-end pe-3">
+                  <a href="#" class="btn btn-sm btn-outline-medical" title="Xem chi tiết">
+                    <i class="bi bi-eye"></i> Xem
+                  </a>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Phân trang -->
+      <div class="card-footer bg-white border-0 d-flex flex-wrap justify-content-between align-items-center gap-3 py-3">
+        <div class="text-muted small">
+          Hiển thị <strong>1–7</strong> trong tổng số <strong>24</strong> hồ sơ
+        </div>
+        <nav>
+          <ul class="pagination pagination-sm mb-0">
+            <li class="page-item disabled">
+              <a class="page-link" href="#"><i class="bi bi-chevron-left"></i></a>
+            </li>
+            <li class="page-item active"><a class="page-link" href="#">1</a></li>
+            <li class="page-item"><a class="page-link" href="#">2</a></li>
+            <li class="page-item"><a class="page-link" href="#">3</a></li>
+            <li class="page-item"><a class="page-link" href="#">4</a></li>
+            <li class="page-item">
+              <a class="page-link" href="#"><i class="bi bi-chevron-right"></i></a>
+            </li>
+          </ul>
+        </nav>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Footer -->
+  <footer class="py-3 mt-5">
+    <div class="container text-center">
+      <p class="mb-0">© 2026 MediCare Profile · Hệ thống hồ sơ sức khỏe điện tử · Dành cho mục đích demo</p>
+    </div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

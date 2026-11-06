@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quản lý quyền nhập hồ sơ</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --medical-primary: #0d6efd;
+      --medical-secondary: #20c997;
+      --medical-light: #e8f4fd;
+      --medical-dark: #0a4d8c;
+      --medical-bg: #f0f7fb;
+    }
+
+    body {
+      background-color: var(--medical-bg);
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      color: #2c3e50;
+      font-size: 0.95rem;
+    }
+
+    .navbar-medical {
+      background: linear-gradient(135deg, var(--medical-dark), var(--medical-primary));
+      box-shadow: 0 2px 12px rgba(13, 110, 253, 0.25);
+    }
+
+    .page-header {
+      background: linear-gradient(135deg, #ffffff 0%, var(--medical-light) 100%);
+      border-radius: 12px;
+      border: 1px solid rgba(13, 110, 253, 0.15);
+      box-shadow: 0 3px 14px rgba(13, 110, 253, 0.08);
+      padding: 1rem 1.35rem;
+    }
+
+    .section-card {
+      background: #ffffff;
+      border-radius: 12px;
+      border: 1.5px solid #c5d8ef;
+      box-shadow: 0 4px 16px rgba(13, 110, 253, 0.08);
+      overflow: hidden;
+    }
+
+    .section-header {
+      background: linear-gradient(90deg, var(--medical-light), #ffffff);
+      border-bottom: 2px solid var(--medical-primary);
+      padding: 0.65rem 1.15rem;
+      font-weight: 600;
+      color: var(--medical-dark);
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      font-size: 0.95rem;
+    }
+
+    .section-header i {
+      color: var(--medical-primary);
+    }
+
+    .request-item,
+    .doctor-row {
+      padding: 0.75rem 1.15rem;
+      border-bottom: 1px solid #e0eaf5;
+      transition: background 0.15s ease;
+    }
+
+    .request-item:last-child,
+    .doctor-row:last-child {
+      border-bottom: none;
+    }
+
+    .request-item:hover,
+    .doctor-row:hover {
+      background: #f5f9fd;
+    }
+
+    .doctor-avatar {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--medical-primary), var(--medical-secondary));
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.05rem;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    .doctor-avatar.sm {
+      width: 38px;
+      height: 38px;
+      font-size: 0.95rem;
+    }
+
+    .btn-accept {
+      background: linear-gradient(135deg, #198754, #157347);
+      border: none;
+      color: white;
+      font-weight: 500;
+      border-radius: 7px;
+      padding: 0.3rem 0.85rem;
+      font-size: 0.85rem;
+    }
+
+    .btn-accept:hover {
+      background: linear-gradient(135deg, #157347, #146c43);
+      color: white;
+    }
+
+    .btn-reject {
+      background: white;
+      border: 1.5px solid #dc3545;
+      color: #dc3545;
+      font-weight: 500;
+      border-radius: 7px;
+      padding: 0.3rem 0.85rem;
+      font-size: 0.85rem;
+    }
+
+    .btn-reject:hover {
+      background: #dc3545;
+      color: white;
+    }
+
+    .btn-revoke {
+      background: white;
+      border: 1.5px solid #6c757d;
+      color: #6c757d;
+      font-weight: 500;
+      border-radius: 7px;
+      padding: 0.25rem 0.75rem;
+      font-size: 0.8rem;
+    }
+
+    .btn-revoke:hover {
+      background: #6c757d;
+      color: white;
+    }
+
+    .badge-pending {
+      background: #fff3cd;
+      color: #664d03;
+      font-weight: 500;
+      font-size: 0.72rem;
+      padding: 0.25em 0.55em;
+    }
+
+    .badge-active {
+      background: #d1e7dd;
+      color: #0f5132;
+      font-weight: 500;
+      font-size: 0.72rem;
+      padding: 0.25em 0.55em;
+    }
+
+    .specialty-tag {
+      font-size: 0.75rem;
+      background: var(--medical-light);
+      color: var(--medical-dark);
+      padding: 0.15em 0.5em;
+      border-radius: 5px;
+      font-weight: 500;
+    }
+
+    footer {
+      background: var(--medical-dark);
+      color: rgba(255, 255, 255, 0.85);
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg navbar-dark navbar-medical sticky-top">
+    <div class="container">
+      <a class="navbar-brand fw-bold" href="#">
+        <i class="bi bi-heart-pulse-fill me-2"></i>MediCare Profile
+      </a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav ms-auto">
+          <li class="nav-item"><a class="nav-link" href="#"><i class="bi bi-person-vcard me-1"></i> Hồ sơ BN</a></li>
+          <li class="nav-item"><a class="nav-link" href="#"><i class="bi bi-clipboard2-pulse me-1"></i> Lịch sử khám</a></li>
+          <li class="nav-item"><a class="nav-link active" href="#"><i class="bi bi-shield-lock me-1"></i> Quyền truy cập</a></li>
+          <li class="nav-item"><a class="nav-link" href="#"><i class="bi bi-calendar-check me-1"></i> Lịch hẹn</a></li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container py-4">
+
+    <!-- Page header -->
+    <div class="page-header mb-3">
+      <h2 class="mb-1 fw-bold text-dark fs-4">
+        <i class="bi bi-shield-lock me-2 text-primary"></i>Quản lý quyền nhập hồ sơ
+      </h2>
+      <p class="mb-0 text-muted small">
+        Bệnh nhân: <strong>Nguyễn Văn An</strong> · Mã BN: <strong>BN-2024-08947</strong>
+      </p>
+      <p class="mb-0 mt-1 small text-muted">
+        Chấp nhận hoặc từ chối yêu cầu của bác sĩ muốn được quyền nhập / cập nhật hồ sơ sức khỏe của bạn.
+      </p>
+    </div>
+
+    <!-- ========== YÊU CẦU ĐANG CHỜ ========== -->
+    <div class="section-card mb-3">
+      <div class="section-header">
+        <i class="bi bi-hourglass-split"></i>
+        Yêu cầu đang chờ xử lý
+        <span class="badge bg-warning text-dark ms-2">2</span>
+      </div>
+
+      <!-- Request 1 -->
+      <div class="request-item">
+        <div class="d-flex flex-wrap align-items-center gap-3">
+          <div class="doctor-avatar">TK</div>
+          <div class="flex-grow-1">
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-0">
+              <strong>BS. Trần Minh Khoa</strong>
+              <span class="specialty-tag">Nội tiết</span>
+              <span class="badge badge-pending rounded-pill">Chờ xác nhận</span>
+            </div>
+            <div class="small text-muted mt-1">
+              <i class="bi bi-hospital me-1"></i>Phòng khám Đa khoa MediCare
+              <span class="mx-1">·</span>
+              <i class="bi bi-clock me-1"></i>02/11/2026 14:22
+            </div>
+          </div>
+          <div class="d-flex gap-2 flex-shrink-0">
+            <button class="btn btn-accept btn-sm">
+              <i class="bi bi-check-lg me-1"></i>Chấp nhận
+            </button>
+            <button class="btn btn-reject btn-sm">
+              <i class="bi bi-x-lg me-1"></i>Từ chối
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Request 2 -->
+      <div class="request-item">
+        <div class="d-flex flex-wrap align-items-center gap-3">
+          <div class="doctor-avatar" style="background: linear-gradient(135deg, #6f42c1, #0dcaf0);">HN</div>
+          <div class="flex-grow-1">
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-0">
+              <strong>BS. Lê Hoàng Nam</strong>
+              <span class="specialty-tag">Tim mạch</span>
+              <span class="badge badge-pending rounded-pill">Chờ xác nhận</span>
+            </div>
+            <div class="small text-muted mt-1">
+              <i class="bi bi-hospital me-1"></i>Bệnh viện Đa khoa Trung ương Cần Thơ
+              <span class="mx-1">·</span>
+              <i class="bi bi-clock me-1"></i>01/11/2026 09:15
+            </div>
+          </div>
+          <div class="d-flex gap-2 flex-shrink-0">
+            <button class="btn btn-accept btn-sm">
+              <i class="bi bi-check-lg me-1"></i>Chấp nhận
+            </button>
+            <button class="btn btn-reject btn-sm">
+              <i class="bi bi-x-lg me-1"></i>Từ chối
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== DANH SÁCH BÁC SĨ ĐÃ CÓ QUYỀN ========== -->
+    <div class="section-card">
+      <div class="section-header">
+        <i class="bi bi-people-fill"></i>
+        Bác sĩ đã được cấp quyền nhập hồ sơ
+        <span class="badge bg-success ms-2">3</span>
+      </div>
+
+      <!-- Doctor 1 -->
+      <div class="doctor-row">
+        <div class="d-flex flex-wrap align-items-center gap-3">
+          <div class="doctor-avatar sm">TK</div>
+          <div class="flex-grow-1">
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-0">
+              <strong>BS. Trần Minh Khoa</strong>
+              <span class="specialty-tag">Nội tiết</span>
+              <span class="badge badge-active rounded-pill">Đang hoạt động</span>
+            </div>
+            <div class="small text-muted mt-1">
+              <i class="bi bi-hospital me-1"></i>Phòng khám Đa khoa MediCare
+              <span class="mx-1">·</span>
+              <i class="bi bi-calendar-check me-1"></i>Từ: 15/08/2025
+            </div>
+          </div>
+          <button class="btn btn-revoke">
+            <i class="bi bi-slash-circle me-1"></i>Thu hồi
+          </button>
+        </div>
+      </div>
+
+      <!-- Doctor 2 -->
+      <div class="doctor-row">
+        <div class="d-flex flex-wrap align-items-center gap-3">
+          <div class="doctor-avatar sm" style="background: linear-gradient(135deg, #fd7e14, #ffc107);">PH</div>
+          <div class="flex-grow-1">
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-0">
+              <strong>BS. Phạm Thị Hương</strong>
+              <span class="specialty-tag">Tổng quát</span>
+              <span class="badge badge-active rounded-pill">Đang hoạt động</span>
+            </div>
+            <div class="small text-muted mt-1">
+              <i class="bi bi-hospital me-1"></i>Phòng khám Đa khoa MediCare
+              <span class="mx-1">·</span>
+              <i class="bi bi-calendar-check me-1"></i>Từ: 03/03/2026
+            </div>
+          </div>
+          <button class="btn btn-revoke">
+            <i class="bi bi-slash-circle me-1"></i>Thu hồi
+          </button>
+        </div>
+      </div>
+
+      <!-- Doctor 3 -->
+      <div class="doctor-row">
+        <div class="d-flex flex-wrap align-items-center gap-3">
+          <div class="doctor-avatar sm" style="background: linear-gradient(135deg, #20c997, #0d6efd);">ND</div>
+          <div class="flex-grow-1">
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-0">
+              <strong>BS. Nguyễn Văn Đức</strong>
+              <span class="specialty-tag">Tiêu hóa</span>
+              <span class="badge badge-active rounded-pill">Đang hoạt động</span>
+            </div>
+            <div class="small text-muted mt-1">
+              <i class="bi bi-hospital me-1"></i>Bệnh viện Đa khoa Cần Thơ
+              <span class="mx-1">·</span>
+              <i class="bi bi-calendar-check me-1"></i>Từ: 22/03/2026
+            </div>
+          </div>
+          <button class="btn btn-revoke">
+            <i class="bi bi-slash-circle me-1"></i>Thu hồi
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Ghi chú -->
+    <div class="mt-3 small text-muted">
+      <i class="bi bi-info-circle me-1"></i>
+      Khi <strong>chấp nhận</strong>, bác sĩ được phép tạo và cập nhật hồ sơ khám liên quan đến bạn. 
+      Bạn có thể <strong>thu hồi quyền</strong> bất cứ lúc nào.
+    </div>
+
+  </div>
+
+  <!-- Footer -->
+  <footer class="py-3 mt-5">
+    <div class="container text-center">
+      <p class="mb-0">© 2026 MediCare Profile · Hệ thống hồ sơ sức khỏe điện tử · Dành cho mục đích demo</p>
+    </div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
