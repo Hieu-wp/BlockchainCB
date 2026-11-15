@@ -1,74 +1,41 @@
-
 package com.blockchaincb.service;
 
-import com.blockchaincb.entity.Admin;
-import com.blockchaincb.repository.AdminRepository;
-
-import org.springframework.security.core.userdetails.User;
+import java.util.Locale;
+import com.blockchaincb.entity.User;
+import com.blockchaincb.repository.UserRepository;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
-
 import org.springframework.stereotype.Service;
 
 /**
- * Service xử lý nghiệp vụ xác thực tài khoản Admin.
- *
- * Chức năng:
- * - Tìm kiếm tài khoản Admin từ cơ sở dữ liệu.
- * - Kiểm tra trạng thái hoạt động của tài khoản.
- * - Cung cấp thông tin đăng nhập cho Spring Security.
- * - Cung cấp vai trò ADMIN để kiểm tra phân quyền.
- *
- * Lưu ý:
- * - Mật khẩu trong cơ sở dữ liệu phải được băm bằng BCrypt.
- * - Không trả mật khẩu hoặc mã băm mật khẩu qua REST API.
- * - Không cho phép người dùng tự đăng ký tài khoản Admin.
+ * Nguồn xác thực chung từ public.users.
+ * Yêu cầu password_hash là BCrypt; nếu nhóm dùng Supabase Auth/JWT thì thay cơ chế này.
  */
 @Service
 public class AdminAuthService implements UserDetailsService {
+    private final UserRepository khoNguoiDung;
 
-    // Repository truy vấn tài khoản Admin trong MySQL
-    private final AdminRepository adminRepository;
-
-    /**
-     * Khởi tạo Service bằng cơ chế Dependency Injection.
-     *
-     * @param adminRepository Repository quản lý tài khoản Admin.
-     */
-    public AdminAuthService(AdminRepository adminRepository) {
-        this.adminRepository = adminRepository;
+    public AdminAuthService(UserRepository khoNguoiDung) {
+        this.khoNguoiDung = khoNguoiDung;
     }
 
-    /**
-     * Tải tài khoản Admin theo tên đăng nhập.
-     *
-     * Spring Security tự động gọi phương thức này
-     * trong quá trình xác thực username/password.
-     *
-     * @param tenDangNhap Tên đăng nhập của Admin.
-     * @return Thông tin tài khoản theo chuẩn UserDetails.
-     * @throws UsernameNotFoundException Nếu tài khoản không tồn tại.
-     */
     @Override
-    public UserDetails loadUserByUsername(String tenDangNhap)
-            throws UsernameNotFoundException {
+    public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
+        User nguoiDung = khoNguoiDung.findByEmailIgnoreCase(email)
+            .orElseThrow(() -> new UsernameNotFoundException("Email hoặc mật khẩu không hợp lệ"));
 
-        // Tìm tài khoản Admin trong cơ sở dữ liệu
-        Admin taiKhoanAdmin = adminRepository
-                .findByTenDangNhap(tenDangNhap)
-                .orElseThrow(() ->
-                    new UsernameNotFoundException(
-                        "Tên đăng nhập hoặc mật khẩu không hợp lệ"
-                    )
-                );
+        // Không tự nâng quyền: chỉ chấp nhận các vai trò đã khai báo trong hệ thống.
+        String vaiTro = nguoiDung.getVaiTro().trim().toUpperCase(Locale.ROOT);
+        if (!vaiTro.equals("ADMIN") && !vaiTro.equals("DOCTOR") && !vaiTro.equals("PATIENT")) {
+            throw new UsernameNotFoundException("Vai trò tài khoản không hợp lệ");
+        }
 
-        // Trả về thông tin xác thực cho Spring Security
-        return User.builder()
-                .username(taiKhoanAdmin.getTenDangNhap())
-                .password(taiKhoanAdmin.getMatKhau())
-                .roles("ADMIN")
-                .disabled(!taiKhoanAdmin.isDangHoatDong())
-                .build();
+        return org.springframework.security.core.userdetails.User.builder()
+            .username(nguoiDung.getEmail())
+            .password(nguoiDung.getMatKhauMaHoa())
+            .roles(vaiTro)
+            .disabled(!nguoiDung.isDangHoatDong())
+            .build();
     }
 }

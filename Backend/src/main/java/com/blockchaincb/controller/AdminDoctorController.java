@@ -6,6 +6,7 @@ import com.blockchaincb.dto.DoctorResponse;
 import com.blockchaincb.service.AdminDoctorService;
 
 import java.util.List;
+import jakarta.validation.Valid;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -105,7 +106,7 @@ public class AdminDoctorController {
     @PostMapping("/{id}/reject")
     public ResponseEntity<DoctorResponse> tuChoiBacSi(
             @PathVariable("id") Long maBacSi,
-            @RequestBody DoctorActionRequest yeuCau) {
+            @Valid @RequestBody DoctorActionRequest yeuCau) {
 
         return ResponseEntity.ok(
             dichVuQuanLyBacSi.tuChoiBacSi(
@@ -123,7 +124,7 @@ public class AdminDoctorController {
     @PostMapping("/{id}/suspend")
     public ResponseEntity<DoctorResponse> khoaBacSi(
             @PathVariable("id") Long maBacSi,
-            @RequestBody DoctorActionRequest yeuCau) {
+            @Valid @RequestBody DoctorActionRequest yeuCau) {
 
         return ResponseEntity.ok(
             dichVuQuanLyBacSi.khoaBacSi(

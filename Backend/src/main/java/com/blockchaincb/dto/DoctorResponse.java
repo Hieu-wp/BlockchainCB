@@ -1,12 +1,6 @@
-
 package com.blockchaincb.dto;
 
-/**
- * Dữ liệu thông tin bác sĩ trả về cho Admin.
- *
- * Chỉ chứa thông tin phục vụ việc quản lý,
- * không chứa hồ sơ bệnh án của bệnh nhân.
- */
+/** Thông tin công khai cho Admin; không trả mật khẩu hoặc bệnh án. */
 public record DoctorResponse(
     Long maBacSi,
     String hoTen,
@@ -15,5 +9,6 @@ public record DoctorResponse(
     String noiCongTac,
     String chuyenKhoa,
     String diaChiVi,
-    String trangThai
+    String trangThai,
+    String trangThaiPheDuyet
 ) {}

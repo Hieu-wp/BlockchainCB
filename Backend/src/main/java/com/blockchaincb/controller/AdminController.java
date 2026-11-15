@@ -1,81 +1,45 @@
-
 package com.blockchaincb.controller;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
-
+import com.blockchaincb.repository.UserRepository;
+import com.blockchaincb.repository.DoctorRepository;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * Controller quản lý các chức năng tổng quan của Admin.
- *
- * Chức năng:
- * - Kiểm tra trạng thái hoạt động của API Admin.
- * - Cung cấp dữ liệu thống kê cho Dashboard.
- *
- * Lưu ý:
- * - Các API được bảo vệ bởi Spring Security.
- * - Dữ liệu thống kê hiện tại là dữ liệu mẫu.
- * - Sau này sẽ kết nối Service và Database.
- */
+/** Thống kê dữ liệu thật từ public.users và public.doctors. */
 @RestController
 @RequestMapping("/api/admin")
 public class AdminController {
+    private final UserRepository khoNguoiDung;
+    private final DoctorRepository khoBacSi;
+    private final String trangThaiChoDuyet;
 
-    /**
-     * Kiểm tra trạng thái hoạt động của Admin API.
-     *
-     * Đường dẫn: GET /api/admin/health
-     *
-     * @return Thông báo trạng thái hoạt động.
-     */
-    @GetMapping("/health")
-    public ResponseEntity<Map<String, String>> kiemTraHoatDong() {
-
-        // Tạo dữ liệu phản hồi
-        Map<String, String> duLieuPhanHoi = new LinkedHashMap<>();
-
-        duLieuPhanHoi.put("trangThai", "thanhCong");
-        duLieuPhanHoi.put("thongBao", "Admin API đang hoạt động");
-
-        return ResponseEntity.ok(duLieuPhanHoi);
+    public AdminController(UserRepository khoNguoiDung, DoctorRepository khoBacSi,
+            @Value("${app.doctor.pending-status:PENDING}") String trangThaiChoDuyet) {
+        this.khoNguoiDung = khoNguoiDung;
+        this.khoBacSi = khoBacSi;
+        this.trangThaiChoDuyet = trangThaiChoDuyet;
     }
 
-    /**
-     * Lấy dữ liệu thống kê tổng quan hệ thống.
-     *
-     * Đường dẫn: GET /api/admin/dashboard
-     *
-     * @return Dữ liệu thống kê Dashboard.
-     */
+    @GetMapping("/health")
+    public ResponseEntity<Map<String, String>> kiemTraHoatDong() {
+        return ResponseEntity.ok(Map.of("trangThai", "thanhCong", "thongBao", "Admin API đang hoạt động"));
+    }
+
     @GetMapping("/dashboard")
     public ResponseEntity<Map<String, Object>> layThongKeTongQuan() {
-
-        // Khởi tạo dữ liệu thống kê
-        Map<String, Object> thongKe = new LinkedHashMap<>();
-
-        // Thống kê tài khoản người dùng
-        thongKe.put("tongNguoiDung", 0);
-        thongKe.put("tongBenhNhan", 0);
-        thongKe.put("tongBacSi", 0);
-
-        // Thống kê trạng thái bác sĩ
-        thongKe.put("bacSiChoDuyet", 0);
-        thongKe.put("bacSiDaDuyet", 0);
-        thongKe.put("bacSiBiTuChoi", 0);
-        thongKe.put("bacSiBiKhoa", 0);
-
-        // Thống kê hồ sơ khám bệnh
-        thongKe.put("tongHoSoKhamBenh", 0);
-
-        // Thống kê giao dịch Blockchain
-        thongKe.put("tongGiaoDich", 0);
-        thongKe.put("giaoDichThanhCong", 0);
-        thongKe.put("giaoDichThatBai", 0);
-
-        return ResponseEntity.ok(thongKe);
+        Map<String, Object> soLieu = new LinkedHashMap<>();
+        soLieu.put("tongNguoiDung", khoNguoiDung.count());
+        soLieu.put("tongBenhNhan", khoNguoiDung.countByVaiTroIgnoreCase("PATIENT"));
+        soLieu.put("tongTaiKhoanVaiTroDoctor", khoNguoiDung.countByVaiTroIgnoreCase("DOCTOR"));
+        soLieu.put("tongHoSoBacSi", khoBacSi.count());
+        soLieu.put("bacSiChoDuyet", khoBacSi.countByTrangThaiPheDuyetIgnoreCase(trangThaiChoDuyet));
+        soLieu.put("taiKhoanDangHoatDong", khoNguoiDung.countByDangHoatDong(true));
+        // Chưa có dữ liệu transaction/audit để tránh trả số giả.
+        return ResponseEntity.ok(soLieu);
     }
 }
