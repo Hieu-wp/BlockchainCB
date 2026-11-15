@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
+
 
 /**
  * Repository quản lý dữ liệu tài khoản Admin.
@@ -23,7 +23,7 @@ import org.springframework.stereotype.Repository;
  * Repository sử dụng Spring Data JPA để làm việc
  * với bảng admins trong cơ sở dữ liệu.
  */
-@Repository
+
 public interface AdminRepository extends JpaRepository<Admin, Long> {
 
     /**

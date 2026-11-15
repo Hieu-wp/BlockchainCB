@@ -17,57 +17,65 @@ import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 
 /**
- * Lớp cấu hình bảo mật cho hệ thống BlockchainCB.
+ * Cấu hình bảo mật chung cho hệ thống BlockchainCB.
  *
  * Chức năng:
- * - Cấu hình xác thực đăng nhập Admin.
- * - Phân quyền truy cập các API quản trị.
+ * - Xác thực tài khoản Admin.
+ * - Phân quyền truy cập Admin, Doctor và Patient.
  * - Mã hóa mật khẩu bằng BCrypt.
  * - Quản lý đăng nhập và đăng xuất.
- * - Khởi tạo tài khoản Admin tạm thời trong bộ nhớ.
+ *
+ * Lưu ý:
+ * - Hiện tại chỉ có tài khoản Admin thử nghiệm.
+ * - Doctor và Patient cần tích hợp xác thực chung sau.
  */
 @Configuration
 public class SecurityConfig {
 
     /**
-     * Cấu hình bộ lọc bảo mật của hệ thống.
+     * Cấu hình xác thực và phân quyền HTTP.
      *
-     * Chỉ tài khoản có vai trò ADMIN mới được truy cập
-     * các API bắt đầu bằng /api/admin/.
-     *
-     * @param http Đối tượng cấu hình bảo mật HTTP.
+     * @param http Đối tượng cấu hình Spring Security.
      * @return Bộ lọc bảo mật đã được cấu hình.
-     * @throws Exception Nếu xảy ra lỗi trong quá trình cấu hình.
+     * @throws Exception Nếu cấu hình không thành công.
      */
     @Bean
     public SecurityFilterChain cauHinhBaoMat(
             HttpSecurity http) throws Exception {
 
         http
-            // Cấu hình quyền truy cập các đường dẫn
+            // Cấu hình phân quyền theo từng nhóm API
             .authorizeHttpRequests(phanQuyen -> phanQuyen
 
-                // Cho phép truy cập trang đăng nhập và trang lỗi
+                // Cho phép truy cập trang đăng nhập
                 .requestMatchers(
                     "/login",
                     "/error"
                 ).permitAll()
 
-                // Chỉ Admin được truy cập API quản trị
+                // Chỉ ADMIN được truy cập API quản trị
                 .requestMatchers("/api/admin/**")
                 .hasRole("ADMIN")
 
-                // Từ chối những yêu cầu không được cấp quyền
+                // Chỉ DOCTOR được truy cập API bác sĩ
+                .requestMatchers("/api/doctor/**")
+                .hasRole("DOCTOR")
+
+                // Chỉ PATIENT được truy cập API bệnh nhân
+                .requestMatchers("/api/patient/**")
+                .hasRole("PATIENT")
+
+                // Từ chối các đường dẫn chưa được định nghĩa
                 .anyRequest().denyAll()
             )
 
             // Cấu hình đăng nhập bằng tài khoản và mật khẩu
             .formLogin(dangNhap -> dangNhap
 
-                // Chuyển đến trang thông tin Admin sau khi đăng nhập
+                // Chuyển Admin đến API thông tin đăng nhập
                 .defaultSuccessUrl("/api/admin/me", true)
 
-                // Cho phép người chưa đăng nhập truy cập trang đăng nhập
+                // Cho phép truy cập trang đăng nhập
                 .permitAll()
             )
 
@@ -77,13 +85,12 @@ public class SecurityConfig {
                 // Chuyển về trang đăng nhập sau khi đăng xuất
                 .logoutSuccessUrl("/login?logout")
 
-                // Hủy phiên đăng nhập hiện tại
+                // Hủy phiên đăng nhập
                 .invalidateHttpSession(true)
 
                 // Xóa cookie phiên đăng nhập
                 .deleteCookies("JSESSIONID")
 
-                // Cho phép thực hiện chức năng đăng xuất
                 .permitAll()
             );
 
@@ -93,10 +100,7 @@ public class SecurityConfig {
     /**
      * Khởi tạo bộ mã hóa mật khẩu BCrypt.
      *
-     * BCrypt được sử dụng để băm mật khẩu trước khi lưu trữ
-     * và kiểm tra mật khẩu khi người dùng đăng nhập.
-     *
-     * @return Đối tượng mã hóa mật khẩu BCrypt.
+     * @return Bộ mã hóa mật khẩu.
      */
     @Bean
     public PasswordEncoder boMaHoaMatKhau() {
@@ -104,17 +108,15 @@ public class SecurityConfig {
     }
 
     /**
-     * Khởi tạo tài khoản Admin tạm thời trong bộ nhớ.
+     * Khởi tạo tài khoản Admin tạm thời.
      *
-     * Thông tin đăng nhập được lấy từ application.properties
-     * thông qua các biến admin.username và admin.password.
+     * Tên đăng nhập và mật khẩu được lấy từ
+     * các biến môi trường của hệ thống.
      *
-     * Mật khẩu được băm bằng BCrypt trước khi sử dụng.
-     *
-     * @param tenDangNhap Tên đăng nhập của Admin.
-     * @param matKhau Mật khẩu của Admin.
+     * @param tenDangNhap Tên đăng nhập Admin.
+     * @param matKhau Mật khẩu Admin.
      * @param boMaHoaMatKhau Bộ mã hóa mật khẩu.
-     * @return Dịch vụ quản lý thông tin tài khoản.
+     * @return Dịch vụ quản lý tài khoản trong bộ nhớ.
      */
     @Bean
     public UserDetailsService dichVuTaiKhoan(
@@ -122,14 +124,13 @@ public class SecurityConfig {
             @Value("${admin.password}") String matKhau,
             PasswordEncoder boMaHoaMatKhau) {
 
-        // Tạo tài khoản Admin và mã hóa mật khẩu
+        // Tạo tài khoản Admin thử nghiệm
         UserDetails taiKhoanAdmin = User.builder()
             .username(tenDangNhap)
             .password(boMaHoaMatKhau.encode(matKhau))
             .roles("ADMIN")
             .build();
 
-        // Lưu tài khoản Admin tạm thời trong bộ nhớ
         return new InMemoryUserDetailsManager(taiKhoanAdmin);
     }
 }
