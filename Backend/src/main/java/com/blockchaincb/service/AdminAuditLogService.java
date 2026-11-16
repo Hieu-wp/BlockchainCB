@@ -4,6 +4,7 @@ package com.blockchaincb.service;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.RowMapper;
@@ -22,28 +23,52 @@ import org.springframework.web.server.ResponseStatusException;
  *
  * Chức năng:
  * - Xác định Admin đang đăng nhập.
- * - Ghi nhận các thao tác quản trị thành công.
- * - Truy vấn nhật ký theo thời gian.
- * - Phân trang lịch sử thao tác.
+ * - Kiểm tra quyền quản trị.
+ * - Ghi nhật ký thao tác Admin.
+ * - Xem và phân trang nhật ký.
  *
- * Yêu cầu bảng public.admin_audit_logs tồn tại.
+ * Các thao tác ghi nhật ký phải thực hiện
+ * trong cùng giao dịch với Service nghiệp vụ.
  *
- * Không ghi dữ liệu nhạy cảm như mật khẩu,
- * token, khóa bí mật hoặc nội dung bệnh án.
+ * Không lưu mật khẩu, token, khóa bí mật
+ * hoặc nội dung hồ sơ bệnh án.
  */
 @Service
 public class AdminAuditLogService {
 
+    // =====================================================
+    // 1. HẰNG SỐ
+    // =====================================================
+
+    private static final int KICH_THUOC_TOI_DA = 100;
+
+    private static final int DO_DAI_MO_TA_TOI_DA = 500;
+
+    private static final String QUYEN_ADMIN = "ROLE_ADMIN";
+
+    private static final String VAI_TRO_ADMIN = "ADMIN";
+
+    // =====================================================
+    // 2. DEPENDENCY
+    // =====================================================
+
     private final NamedParameterJdbcTemplate truyVanDuLieu;
 
+    /**
+     * Khởi tạo dịch vụ nhật ký.
+     */
     public AdminAuditLogService(
             NamedParameterJdbcTemplate truyVanDuLieu) {
 
         this.truyVanDuLieu = truyVanDuLieu;
     }
 
+    // =====================================================
+    // 3. DTO NHẬT KÝ
+    // =====================================================
+
     /**
-     * DTO dùng để trả về một bản ghi nhật ký.
+     * Thông tin một nhật ký quản trị.
      */
     public record NhatKyQuanTri(
             Long maNhatKy,
@@ -56,7 +81,7 @@ public class AdminAuditLogService {
     ) {}
 
     /**
-     * DTO phân trang nhật ký quản trị.
+     * Kết quả phân trang danh sách nhật ký.
      */
     public record TrangNhatKyQuanTri(
             List<NhatKyQuanTri> danhSachNhatKy,
@@ -66,15 +91,21 @@ public class AdminAuditLogService {
             long tongSoTrang
     ) {}
 
+    // =====================================================
+    // 4. CÁC HÀNH ĐỘNG QUẢN TRỊ
+    // =====================================================
+
     /**
-     * Các loại hành động được hỗ trợ.
+     * Các hành động quản trị được hỗ trợ.
      *
-     * Có thể mở rộng khi hệ thống bổ sung
-     * chức năng quản trị mới.
+     * Không ghi nhận thành công khi nghiệp vụ
+     * chưa thực sự hoàn tất.
      */
     public enum HanhDongQuanTri {
+
         USER_LOCK,
         USER_UNLOCK,
+
         DOCTOR_APPROVE,
         DOCTOR_REJECT,
         DOCTOR_SUSPEND,
@@ -82,15 +113,20 @@ public class AdminAuditLogService {
     }
 
     /**
-     * Các đối tượng có thể bị tác động.
+     * Loại đối tượng bị tác động.
      */
     public enum LoaiDoiTuong {
+
         USER,
         DOCTOR
     }
 
+    // =====================================================
+    // 5. ÁNH XẠ DỮ LIỆU NHẬT KÝ
+    // =====================================================
+
     /**
-     * Ánh xạ dữ liệu nhật ký từ PostgreSQL.
+     * Chuyển bản ghi PostgreSQL thành DTO.
      */
     private final RowMapper<NhatKyQuanTri> anhXaNhatKy =
             (ketQua, soDong) -> {
@@ -114,19 +150,26 @@ public class AdminAuditLogService {
                 );
             };
 
+    // =====================================================
+    // 6. XÁC ĐỊNH ADMIN ĐANG ĐĂNG NHẬP
+    // =====================================================
+
     /**
-     * Xác định ID Admin đang đăng nhập.
+     * Lấy ID Admin đã xác thực từ Spring Security.
      *
-     * Không cho phép API truyền tùy ý admin_id,
-     * tránh giả mạo người thực hiện thao tác.
+     * Không nhận ID Admin từ request nhằm tránh
+     * giả mạo người thực hiện thao tác.
+     *
+     * Cơ chế xác thực hiện tại sử dụng email
+     * làm username đăng nhập.
      */
-    @Transactional(readOnly = true)
     public Long layMaAdminDangNhap() {
 
         Authentication xacThuc =
                 SecurityContextHolder.getContext()
                         .getAuthentication();
 
+        // Kiểm tra phiên đăng nhập.
         if (xacThuc == null
                 || !xacThuc.isAuthenticated()
                 || xacThuc instanceof AnonymousAuthenticationToken) {
@@ -137,11 +180,12 @@ public class AdminAuditLogService {
             );
         }
 
+        // Kiểm tra quyền quản trị.
         boolean coQuyenAdmin =
                 xacThuc.getAuthorities()
                         .stream()
                         .anyMatch(quyen ->
-                                "ROLE_ADMIN".equals(
+                                QUYEN_ADMIN.equals(
                                         quyen.getAuthority()
                                 )
                         );
@@ -154,20 +198,37 @@ public class AdminAuditLogService {
             );
         }
 
-        // Email là username trong cơ chế đăng nhập hiện tại.
+        // Lấy email đã xác thực từ Spring Security.
         String emailAdmin = xacThuc.getName();
 
+        if (emailAdmin == null || emailAdmin.isBlank()) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "Không xác định được tài khoản Admin"
+            );
+        }
+
+        // Chỉ chấp nhận Admin đang hoạt động.
         String sql = """
                 SELECT id
                 FROM public.users
-                WHERE LOWER(email) = LOWER(:email)
-                  AND UPPER(role) = 'ADMIN'
+                WHERE LOWER(email) = :email
+                  AND UPPER(role) = :vaiTro
                   AND enabled = TRUE
                 """;
 
         MapSqlParameterSource thamSo =
                 new MapSqlParameterSource()
-                        .addValue("email", emailAdmin);
+                        .addValue(
+                                "email",
+                                emailAdmin.trim()
+                                        .toLowerCase(Locale.ROOT)
+                        )
+                        .addValue(
+                                "vaiTro",
+                                VAI_TRO_ADMIN
+                        );
 
         List<Long> danhSachMaAdmin =
                 truyVanDuLieu.queryForList(
@@ -180,24 +241,32 @@ public class AdminAuditLogService {
 
             throw new ResponseStatusException(
                     HttpStatus.FORBIDDEN,
-                    "Không tìm thấy tài khoản Admin hợp lệ"
+                    "Tài khoản Admin không tồn tại hoặc đã bị vô hiệu hóa"
             );
         }
 
         return danhSachMaAdmin.get(0);
     }
 
+    // =====================================================
+    // 7. GHI NHẬT KÝ QUẢN TRỊ
+    // =====================================================
+
     /**
      * Ghi nhật ký thao tác quản trị.
      *
-     * Phương thức này yêu cầu đã có giao dịch
-     * database từ Service nghiệp vụ.
+     * Phải được gọi từ Service nghiệp vụ
+     * đang có giao dịch @Transactional.
      *
-     * Nếu thao tác ghi nhật ký thất bại,
-     * giao dịch database bên ngoài sẽ rollback.
+     * Propagation.MANDATORY:
+     * - Không cho phép tự tạo giao dịch mới.
+     * - Tham gia giao dịch đang tồn tại.
+     * - Nếu ghi nhật ký lỗi, exception được
+     *   truyền ra để rollback giao dịch.
      *
-     * Chỉ gọi sau khi nghiệp vụ được xác nhận
-     * thực hiện thành công.
+     * Lưu ý:
+     * Chỉ ghi nhật ký sau khi cập nhật dữ liệu
+     * nghiệp vụ thành công.
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public Long ghiNhatKy(
@@ -206,15 +275,25 @@ public class AdminAuditLogService {
             Long maDoiTuong,
             String moTa) {
 
-        // Kiểm tra dữ liệu đầu vào.
-        if (hanhDong == null || loaiDoiTuong == null) {
+        // Kiểm tra hành động.
+        if (hanhDong == null) {
 
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Hành động hoặc loại đối tượng không hợp lệ"
+                    "Hành động quản trị không hợp lệ"
             );
         }
 
+        // Kiểm tra loại đối tượng.
+        if (loaiDoiTuong == null) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Loại đối tượng không hợp lệ"
+            );
+        }
+
+        // Kiểm tra ID đối tượng.
         if (maDoiTuong == null || maDoiTuong <= 0) {
 
             throw new ResponseStatusException(
@@ -223,19 +302,13 @@ public class AdminAuditLogService {
             );
         }
 
-        if (moTa == null
-                || moTa.isBlank()
-                || moTa.length() > 500) {
+        // Chuẩn hóa và kiểm tra mô tả.
+        String moTaChuanHoa = kiemTraVaChuanHoaMoTa(moTa);
 
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Mô tả phải có từ 1 đến 500 ký tự"
-            );
-        }
-
-        // Lấy ID từ phiên đăng nhập hiện tại.
+        // Xác định Admin từ phiên đăng nhập.
         Long maAdmin = layMaAdminDangNhap();
 
+        // Tạo câu lệnh ghi nhật ký.
         String sql = """
                 INSERT INTO public.admin_audit_logs (
                     admin_id,
@@ -263,44 +336,58 @@ public class AdminAuditLogService {
                                 loaiDoiTuong.name()
                         )
                         .addValue("maDoiTuong", maDoiTuong)
-                        .addValue("moTa", moTa.trim());
+                        .addValue("moTa", moTaChuanHoa);
 
-        return truyVanDuLieu.queryForObject(
-                sql,
-                thamSo,
-                Long.class
-        );
+        // Thực hiện INSERT trong giao dịch hiện tại.
+        Long maNhatKy =
+                truyVanDuLieu.queryForObject(
+                        sql,
+                        thamSo,
+                        Long.class
+                );
+
+        if (maNhatKy == null) {
+
+            throw new IllegalStateException(
+                    "Ghi nhật ký không trả về mã bản ghi"
+            );
+        }
+
+        return maNhatKy;
     }
 
+    // =====================================================
+    // 8. XEM DANH SÁCH NHẬT KÝ
+    // =====================================================
+
     /**
-     * Lấy lịch sử nhật ký quản trị.
+     * Lấy nhật ký quản trị có phân trang.
      *
-     * Kết quả được sắp xếp mới nhất trước.
+     * Trang bắt đầu từ 0.
+     * Số bản ghi mỗi trang từ 1 đến 100.
+     *
+     * Sắp xếp bản ghi mới nhất trước.
      */
     @Transactional(readOnly = true)
     public TrangNhatKyQuanTri layDanhSachNhatKy(
             int trang,
             int kichThuoc) {
 
-        if (trang < 0
-                || kichThuoc < 1
-                || kichThuoc > 100) {
+        // Kiểm tra thông tin phân trang.
+        kiemTraPhanTrang(trang, kichThuoc);
 
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Thông tin phân trang không hợp lệ"
-            );
-        }
-
-        // Đảm bảo người truy vấn đang có quyền Admin.
+        // Chỉ Admin hợp lệ mới được đọc nhật ký.
         layMaAdminDangNhap();
+
+        // Đếm tổng số bản ghi.
+        String sqlDem = """
+                SELECT COUNT(*)
+                FROM public.admin_audit_logs
+                """;
 
         Long ketQuaDem =
                 truyVanDuLieu.queryForObject(
-                        """
-                        SELECT COUNT(*)
-                        FROM public.admin_audit_logs
-                        """,
+                        sqlDem,
                         new MapSqlParameterSource(),
                         Long.class
                 );
@@ -308,6 +395,7 @@ public class AdminAuditLogService {
         long tongPhanTu =
                 ketQuaDem == null ? 0 : ketQuaDem;
 
+        // Tính vị trí bắt đầu của trang.
         long viTriBatDau =
                 (long) trang * kichThuoc;
 
@@ -319,6 +407,7 @@ public class AdminAuditLogService {
                                 viTriBatDau
                         );
 
+        // Truy vấn lịch sử nhật ký.
         String sql = """
                 SELECT
                     id,
@@ -341,6 +430,7 @@ public class AdminAuditLogService {
                         anhXaNhatKy
                 );
 
+        // Tính tổng số trang.
         long tongSoTrang =
                 tongPhanTu / kichThuoc
                 + (tongPhanTu % kichThuoc == 0 ? 0 : 1);
@@ -352,5 +442,54 @@ public class AdminAuditLogService {
                 tongPhanTu,
                 tongSoTrang
         );
+    }
+
+    // =====================================================
+    // 9. KIỂM TRA DỮ LIỆU ĐẦU VÀO
+    // =====================================================
+
+    /**
+     * Kiểm tra và chuẩn hóa mô tả nhật ký.
+     */
+    private String kiemTraVaChuanHoaMoTa(
+            String moTa) {
+
+        if (moTa == null || moTa.isBlank()) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Mô tả nhật ký không được để trống"
+            );
+        }
+
+        String moTaChuanHoa = moTa.trim();
+
+        if (moTaChuanHoa.length() > DO_DAI_MO_TA_TOI_DA) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Mô tả nhật ký không được vượt quá 500 ký tự"
+            );
+        }
+
+        return moTaChuanHoa;
+    }
+
+    /**
+     * Kiểm tra trang và kích thước trang.
+     */
+    private void kiemTraPhanTrang(
+            int trang,
+            int kichThuoc) {
+
+        if (trang < 0
+                || kichThuoc < 1
+                || kichThuoc > KICH_THUOC_TOI_DA) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Trang phải >= 0 và kích thước từ 1 đến 100"
+            );
+        }
     }
 }
