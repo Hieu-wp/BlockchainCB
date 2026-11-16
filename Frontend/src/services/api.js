@@ -1,10 +1,14 @@
-
 /**
  * BlockchainCB - API quản trị viên
  *
  * Sử dụng Spring Security Form Login + Session Cookie HttpOnly.
  * Không lưu mật khẩu, session ID hoặc CSRF token vào localStorage.
  */
+
+// Giới hạn thời gian chờ để giao diện có thể thử lại khi mạng bị treo.
+async function ketNoi(duongDan, tuyChon) {
+  return fetch(duongDan, { ...tuyChon, signal: AbortSignal.timeout(15000) })
+}
 
 // Tạo lỗi HTTP để các trang React có thể xử lý.
 const loiHttp = (ma, thongBao) =>
@@ -37,7 +41,7 @@ export async function layCsrfToken() {
   let phanHoi
 
   try {
-    phanHoi = await fetch('/login', {
+    phanHoi = await ketNoi('/login', {
       method: 'GET',
       credentials: 'same-origin',
     })
@@ -50,7 +54,7 @@ export async function layCsrfToken() {
   if (!phanHoi.ok) {
     throw loiHttp(
       phanHoi.status,
-      'Không tải được trang xác thực.'
+      'Không tải được trang xác thực. Kiểm tra Backend tại localhost:8080 và proxy /login.'
     )
   }
 
@@ -102,7 +106,7 @@ export async function yeuCau(duongDan, tuyChon = {}) {
   let phanHoi
 
   try {
-    phanHoi = await fetch(duongDan, {
+    phanHoi = await ketNoi(duongDan, {
       method: phuongThuc,
       headers,
       body,
@@ -112,6 +116,23 @@ export async function yeuCau(duongDan, tuyChon = {}) {
     throw new Error(
       'Không thể kết nối đến Backend Spring Boot.'
     )
+  }
+
+  if (phanHoi.status >= 500) {
+    throw loiHttp(phanHoi.status, `Backend chưa sẵn sàng hoặc gặp lỗi (HTTP ${phanHoi.status}). Kiểm tra Spring Boot tại localhost:8080.`)
+  }
+  if (phanHoi.status === 401) {
+    window.dispatchEvent(new Event('admin:het-phien'))
+    throw loiHttp(401, 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.')
+  }
+  // Phân biệt hết phiên (Spring có thể trả 403) với lỗi CSRF của phiên còn hợp lệ.
+  if (phanHoi.status === 403 && duongDan !== '/api/admin/me') {
+    try {
+      const phien = await yeuCau('/api/admin/me')
+      if (!coQuyenAdmin(phien)) window.dispatchEvent(new Event('admin:het-phien'))
+    } catch (loiPhien) {
+      if ([401, 403].includes(loiPhien.status)) window.dispatchEvent(new Event('admin:het-phien'))
+    }
   }
 
   const contentType =
@@ -125,13 +146,11 @@ export async function yeuCau(duongDan, tuyChon = {}) {
   // Nếu Spring Security chuyển về trang đăng nhập,
   // phiên hiện tại không còn hợp lệ.
   if (
-    contentType.includes('text/html') ||
+    (phanHoi.ok && contentType.includes('text/html')) ||
     duongDanCuoi === '/login'
   ) {
-    throw loiHttp(
-      401,
-      'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.'
-    )
+    window.dispatchEvent(new Event('admin:het-phien'))
+    throw loiHttp(401, 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.')
   }
 
   let duLieu = null
@@ -139,7 +158,7 @@ export async function yeuCau(duongDan, tuyChon = {}) {
   if (phanHoi.status !== 204) {
     duLieu = contentType.includes('application/json')
       ? await phanHoi.json()
-      : await phanHoi.text()
+      : contentType.includes('text/html') ? null : await phanHoi.text()
   }
 
   if (!phanHoi.ok) {
@@ -157,7 +176,9 @@ export async function yeuCau(duongDan, tuyChon = {}) {
       thongBao &&
       String(thongBao).length < 200
         ? String(thongBao)
-        : `Yêu cầu thất bại (HTTP ${phanHoi.status}).`
+        : phanHoi.status === 403
+          ? 'Yêu cầu bị từ chối. Kiểm tra quyền truy cập hoặc đăng nhập lại để làm mới phiên và CSRF.'
+          : `Yêu cầu thất bại (HTTP ${phanHoi.status}).`
     )
   }
 
@@ -184,7 +205,7 @@ export async function dangNhap(email, matKhau) {
   let phanHoi
 
   try {
-    phanHoi = await fetch('/login', {
+    phanHoi = await ketNoi('/login', {
       method: 'POST',
       credentials: 'same-origin',
       headers: {
@@ -223,7 +244,13 @@ export async function dangNhap(email, matKhau) {
   }
 
   // Xác minh phiên đăng nhập bằng Backend.
-  const duLieu = await yeuCau('/api/admin/me')
+  let duLieu
+  try {
+    duLieu = await yeuCau('/api/admin/me')
+  } catch (loiPhien) {
+    if (loiPhien.status === 403) throw loiHttp(403, 'Tài khoản không có quyền truy cập ADMIN.')
+    throw loiPhien
+  }
 
   if (!coQuyenAdmin(duLieu)) {
     throw loiHttp(
@@ -241,7 +268,7 @@ export async function dangNhap(email, matKhau) {
 export async function dangXuat() {
   const token = await layCsrfToken()
 
-  const phanHoi = await fetch('/logout', {
+  const phanHoi = await ketNoi('/logout', {
     method: 'POST',
     credentials: 'same-origin',
     headers: {
@@ -252,7 +279,7 @@ export async function dangXuat() {
     }),
   })
 
-  if (!phanHoi.ok) {
+  if (!phanHoi.ok || new URL(phanHoi.url, window.location.origin).searchParams.has('error')) {
     throw loiHttp(
       phanHoi.status,
       'Không thể đăng xuất. Vui lòng thử lại.'
@@ -266,6 +293,9 @@ export async function dangXuat() {
  * Các API Backend Admin đã xây dựng.
  */
 export const apiAdmin = {
+  // Endpoint hiện có chỉ xác minh Admin API, không giám sát database hoặc Blockchain.
+  sucKhoe: () => yeuCau('/api/admin/health'),
+
   // Thông tin phiên đăng nhập Admin
   me: () =>
     yeuCau('/api/admin/me'),
@@ -281,8 +311,8 @@ export const apiAdmin = {
     ),
 
   // Chi tiết người dùng
-  chiTietNguoiDung: (id) =>
-    yeuCau(`/api/admin/users/${id}`),
+  chiTietNguoiDung: ({ ma }) =>
+    yeuCau(`/api/admin/users/${encodeURIComponent(ma)}`),
 
   // Khóa tài khoản PATIENT
   khoa: (id, lyDo) =>
@@ -302,6 +332,9 @@ export const apiAdmin = {
     yeuCau(
       `/api/admin/doctors/search?${new URLSearchParams(params)}`
     ),
+
+  chiTietBacSi: ({ ma }) =>
+    yeuCau(`/api/admin/doctors/${encodeURIComponent(ma)}`),
 
   // Danh sách bác sĩ chờ phê duyệt
   bacSiChoDuyet: () =>

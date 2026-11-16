@@ -1,9 +1,8 @@
-
 import { useEffect, useState } from 'react'
 import {
   BrowserRouter,
   NavLink,
-  Navigate,
+  Link,
   Route,
   Routes,
   useLocation,
@@ -24,6 +23,9 @@ import {
   Mail,
   Eye,
   EyeOff,
+  Blocks,
+  Server,
+  UserRound,
 } from 'lucide-react'
 
 // Các trang quản trị
@@ -31,6 +33,10 @@ import Dashboard from './pages/Dashboard'
 import UsersPage from './pages/Users'
 import DoctorsPage from './pages/Doctors'
 import AuditLogs from './pages/AuditLogs'
+import Transactions from './pages/Transactions'
+import AdminProfile from './pages/AdminProfile'
+import SystemStatus from './pages/SystemStatus'
+import NotFound from './pages/NotFound'
 
 // Các hàm gọi API Spring Boot
 import {
@@ -68,13 +74,16 @@ const menu = [
     name: 'Nhật ký quản trị',
     icon: ScrollText,
   },
+  { path: '/transactions', name: 'Giao dịch Blockchain', icon: Blocks },
+  { path: '/system-status', name: 'Trạng thái hệ thống', icon: Server },
+  { path: '/profile', name: 'Hồ sơ Admin', icon: UserRound },
 ]
 
 // =====================================================
 // 2. GIAO DIỆN ĐĂNG NHẬP ADMIN
 // =====================================================
 
-function DangNhap({ onDangNhap }) {
+function DangNhap({ onDangNhap, thongBaoPhien }) {
   const [email, setEmail] = useState('')
   const [matKhau, setMatKhau] = useState('')
   const [hienMatKhau, setHienMatKhau] = useState(false)
@@ -106,7 +115,7 @@ function DangNhap({ onDangNhap }) {
       // Không giữ mật khẩu trong state sau khi đăng nhập.
       setMatKhau('')
 
-      onDangNhap()
+      onDangNhap(duLieu)
     } catch (loiDangNhap) {
       setLoi(
         loiDangNhap?.message ||
@@ -219,12 +228,12 @@ function DangNhap({ onDangNhap }) {
           </label>
 
           {/* Hiển thị lỗi đăng nhập */}
-          {loi && (
+          {(loi || thongBaoPhien) && (
             <div
               className="login-error"
               role="alert"
             >
-              {loi}
+              {loi || thongBaoPhien}
             </div>
           )}
 
@@ -271,23 +280,38 @@ function DangNhap({ onDangNhap }) {
 // 3. BỐ CỤC CHÍNH CỦA TRANG ADMIN
 // =====================================================
 
-function BoCuc({ onDangXuat }) {
+function BoCuc({ onDangXuat, phien }) {
   const [moMenu, setMoMenu] = useState(false)
-  const [dangXuat, setDangXuat] = useState(false)
+  const [dangDangXuat, setDangDangXuat] = useState(false)
+  const [loiDangXuat, setLoiDangXuat] = useState('')
 
   const viTri = useLocation()
+
+  // Đồng bộ menu với bàn phím và khóa cuộn nền khi mở trên thiết bị nhỏ.
+  useEffect(() => {
+    if (!moMenu) return
+    const cuonCu = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const dongBangPhim = suKien => { if (suKien.key === 'Escape') setMoMenu(false) }
+    window.addEventListener('keydown', dongBangPhim)
+    return () => {
+      document.body.style.overflow = cuonCu
+      window.removeEventListener('keydown', dongBangPhim)
+    }
+  }, [moMenu])
 
   // Xác định trang đang được mở.
   const trangHienTai =
     menu.find(
       (muc) => muc.path === viTri.pathname
-    )?.name || 'Quản trị'
+    )?.name || 'Không tìm thấy trang'
 
   // Xử lý đăng xuất.
   const xuLyDangXuat = async () => {
-    if (dangXuat) return
+    if (dangDangXuat) return
 
-    setDangXuat(true)
+    setDangDangXuat(true)
+    setLoiDangXuat('')
 
     try {
       await dangXuat()
@@ -295,26 +319,19 @@ function BoCuc({ onDangXuat }) {
       // Cập nhật trạng thái về trang đăng nhập.
       onDangXuat()
     } catch (loiDangXuat) {
-      alert(
-        `Không đăng xuất được: ${
-          loiDangXuat?.message || 'Lỗi không xác định'
-        }`
-      )
+      setLoiDangXuat(loiDangXuat?.message || 'Không thể đăng xuất. Vui lòng thử lại.')
     } finally {
-      setDangXuat(false)
+      setDangDangXuat(false)
     }
   }
-
-  // Đóng sidebar khi chuyển trang.
-  useEffect(() => {
-    setMoMenu(false)
-  }, [viTri.pathname])
 
   return (
     <div className="app-shell">
 
       {/* ================= SIDEBAR ================= */}
       <aside
+        id="menu-quan-tri"
+        aria-label="Menu quản trị"
         className={`sidebar ${
           moMenu ? 'sidebar-open' : ''
         }`}
@@ -353,6 +370,7 @@ function BoCuc({ onDangXuat }) {
               <NavLink
                 key={muc.path}
                 to={muc.path}
+                onClick={() => setMoMenu(false)}
                 end={muc.end}
                 className={({ isActive }) =>
                   isActive ? 'active' : ''
@@ -382,11 +400,11 @@ function BoCuc({ onDangXuat }) {
             type="button"
             className="logout-btn"
             onClick={xuLyDangXuat}
-            disabled={dangXuat}
+            disabled={dangDangXuat}
           >
             <LogOut size={18} />
 
-            {dangXuat
+            {dangDangXuat
               ? 'Đang đăng xuất...'
               : 'Đăng xuất'}
           </button>
@@ -413,6 +431,8 @@ function BoCuc({ onDangXuat }) {
               type="button"
               className="menu-toggle"
               aria-label="Mở menu"
+              aria-controls="menu-quan-tri"
+              aria-expanded={moMenu}
               onClick={() => setMoMenu(true)}
             >
               <Menu size={22} />
@@ -435,26 +455,27 @@ function BoCuc({ onDangXuat }) {
             </span>
 
             {/* Thông tin Admin */}
-            <div className="admin-profile">
+            <Link to="/profile" className="admin-profile" aria-label="Xem hồ sơ Admin" onClick={() => setMoMenu(false)}>
               <span className="admin-avatar">
                 A
               </span>
 
               <div>
                 <strong>
-                  Quản trị viên
+                  {phien?.tenDangNhap || 'Quản trị viên'}
                 </strong>
 
                 <small>
                   ROLE_ADMIN
                 </small>
               </div>
-            </div>
+            </Link>
           </div>
         </header>
 
         {/* Nội dung các trang */}
         <main className="main-content">
+          {loiDangXuat && <div className="error-box" role="alert">{loiDangXuat}</div>}
           <Routes>
             <Route
               path="/"
@@ -478,13 +499,11 @@ function BoCuc({ onDangXuat }) {
 
             <Route
               path="*"
-              element={
-                <Navigate
-                  to="/"
-                  replace
-                />
-              }
+              element={<NotFound />}
             />
+            <Route path="/transactions" element={<Transactions />}/>
+            <Route path="/profile" element={<AdminProfile />}/>
+            <Route path="/system-status" element={<SystemStatus />}/>
           </Routes>
         </main>
 
@@ -508,6 +527,18 @@ function UngDung() {
   // admin: đã đăng nhập hợp lệ
   // guest: chưa đăng nhập hoặc không có quyền
   const [trangThai, setTrangThai] = useState('loading')
+  const [phien, setPhien] = useState(null)
+  const [thongBaoPhien, setThongBaoPhien] = useState('')
+
+  useEffect(() => {
+    const hetPhien = () => {
+      setTrangThai('guest')
+      setPhien(null)
+      setThongBaoPhien('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.')
+    }
+    window.addEventListener('admin:het-phien', hetPhien)
+    return () => window.removeEventListener('admin:het-phien', hetPhien)
+  }, [])
 
   useEffect(() => {
     let conHieuLuc = true
@@ -521,6 +552,7 @@ function UngDung() {
         // vaiTro = ADMIN
         // danhSachQuyen chứa ROLE_ADMIN
         if (conHieuLuc) {
+          setPhien(duLieu)
           setTrangThai(
             coQuyenAdmin(duLieu)
               ? 'admin'
@@ -528,12 +560,9 @@ function UngDung() {
           )
         }
       } catch (loi) {
-        console.error(
-          'Lỗi kiểm tra phiên Admin:',
-          loi
-        )
-
         if (conHieuLuc) {
+          setPhien(null)
+          if (![401, 403].includes(loi.status)) setThongBaoPhien(loi.message)
           setTrangThai('guest')
         }
       }
@@ -563,9 +592,8 @@ function UngDung() {
   if (trangThai !== 'admin') {
     return (
       <DangNhap
-        onDangNhap={() =>
-          setTrangThai('admin')
-        }
+        thongBaoPhien={thongBaoPhien}
+        onDangNhap={duLieu => { setPhien(duLieu); setThongBaoPhien(''); setTrangThai('admin') }}
       />
     )
   }
@@ -573,9 +601,12 @@ function UngDung() {
   // Đã đăng nhập với quyền Admin.
   return (
     <BoCuc
-      onDangXuat={() =>
+      phien={phien}
+      onDangXuat={() => {
+        setPhien(null)
+        setThongBaoPhien('')
         setTrangThai('guest')
-      }
+      }}
     />
   )
 }

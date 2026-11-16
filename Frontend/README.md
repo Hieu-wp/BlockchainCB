@@ -1,47 +1,91 @@
 # BlockchainCB – Frontend Admin
 
-Giao diện React + Vite được chuyển thể từ 3 mẫu HTML của nhóm:
-- `trang1.html`: bảng, bộ lọc, thông tin theo phong cách MediCare
-- `trang2.html`: hệ thống thẻ thông tin và bố cục tài liệu
-- `trang3.html`: trạng thái bác sĩ, danh sách yêu cầu
+React + Vite, JavaScript/JSX, React Router và Lucide. Phạm vi Admin; ứng dụng luôn lấy dữ liệu Backend thật.
 
-## Cài đặt vào dự án hiện tại
+## Chạy dự án
 
-**Trước khi chép, sao lưu các file nếu bạn đã sửa `src/App.jsx`, `src/App.css`, `src/index.css`, `src/main.jsx`, `vite.config.js`.**
+Backend cần Java 17, cấu hình PostgreSQL/Supabase hợp lệ theo hướng dẫn của nhóm và tài khoản ADMIN có sẵn. Không đưa thông tin kết nối hoặc mật khẩu vào Git.
 
-1. Giải nén ZIP rồi **chép nội dung** vào `BlockchainCB/Frontend/` (không chép cả thư mục bọc `BlockchainCB_Admin_FE`).
-2. Trong Terminal mới chạy:
+Terminal Backend:
+
+```powershell
+cd D:\Tai_Lieu\Nam_4\HK1\BlockChain\BlockchainCB\Backend
+.\mvnw.cmd spring-boot:run
+```
+
+Terminal Frontend:
 
 ```powershell
 cd D:\Tai_Lieu\Nam_4\HK1\BlockChain\BlockchainCB\Frontend
-npm.cmd install react-router-dom lucide-react
+npm.cmd ci
 npm.cmd run dev
 ```
 
-3. Chạy Backend Spring Boot ở `http://localhost:8080` trong Terminal khác.
-4. Mở `http://localhost:5173` và đăng nhập bằng tài khoản ADMIN **của bạn**. Không hardcode thông tin đăng nhập.
+Mở http://localhost:5173; Backend ở http://localhost:8080. Vite dừng nếu cổng 5173 đã bị chiếm. Khi dependencies đã cài đủ, chỉ cần `npm.cmd run dev`.
 
-## API sử dụng
+## Xác thực và API
 
-| Trang | Endpoint |
+- GET `/login` lấy input `_csrf`; POST `/login` gửi form URL encoded với username, password và CSRF.
+- POST `/login` hiện trả JSON thông báo thành công cũ. Frontend luôn xác minh tiếp GET `/api/admin/me`: `daXacThuc === true`, `vaiTro === 'ADMIN'`, `danhSachQuyen` chứa `ROLE_ADMIN`.
+- Tải lại trang kiểm tra `/me`. Hết phiên đưa về form đăng nhập. Khi API trả 403, kiểm tra `/me` để phân biệt hết phiên với CSRF bị từ chối.
+- Mỗi POST lấy CSRF mới. Không tự gửi lại thao tác ghi khi lỗi. Không lưu mật khẩu, session ID hoặc CSRF vào localStorage.
+- Proxy phát triển chuyển `/api`, `/login`, `/logout` sang Backend. Bản build production cần reverse proxy cùng nguồn và trả `index.html` cho URL React Router; `dist/` không tự cung cấp Backend.
+
+| Chức năng | API |
 |---|---|
-| Phiên Admin | GET `/api/admin/me` |
-| Đăng nhập | POST `/login` (Spring formLogin + CSRF) |
-| Dashboard | GET `/api/admin/dashboard` |
-| Người dùng | GET `/api/admin/users` |
-| Khóa PATIENT | POST `/api/admin/users/{id}/lock` |
+| Thống kê 6 chỉ số | GET `/api/admin/dashboard` |
+| Tìm kiếm/lọc/phân trang người dùng | GET `/api/admin/users` |
+| Chi tiết người dùng | GET `/api/admin/users/{id}` |
+| Khóa PATIENT có lý do | POST `/api/admin/users/{id}/lock` |
 | Mở khóa PATIENT | POST `/api/admin/users/{id}/unlock` |
-| Danh sách bác sĩ | GET `/api/admin/doctors/search` |
-| Nhật ký | GET `/api/admin/audit-logs` |
+| Tìm kiếm/lọc/phân trang bác sĩ | GET `/api/admin/doctors/search` |
+| Tất cả bác sĩ chờ duyệt | GET `/api/admin/doctors/pending` |
+| Chi tiết bác sĩ | GET `/api/admin/doctors/{id}` |
+| Nhật ký có phân trang | GET `/api/admin/audit-logs` |
 | Đăng xuất | POST `/logout` |
 
-## Lưu ý an toàn
+Danh sách người dùng/nhật ký dùng DTO phân trang tiếng Việt; tìm kiếm bác sĩ dùng Spring Page (`content`, `totalElements`, `totalPages`). PENDING là mảng không phân trang: danh sách toàn bộ hồ sơ chờ duyệt, độc lập bộ lọc tìm kiếm. Giấy phép bác sĩ dùng trường `soGiayPhep`, nơi công tác dùng `noiCongTac`.
 
-- Các trang dùng **dữ liệu Backend thật**, không mô phỏng người dùng/hồ sơ bệnh án.
-- Chỉ hỗ trợ khóa/mở khóa tài khoản PATIENT theo quy tắc hiện tại. Có hộp xác nhận và lý do khóa.
-- Không bật thao tác approve/reject/suspend/reactivate bác sĩ vì Backend còn trả 501 và cần thiết kế đồng bộ Blockchain.
-- Nếu POST trả 403, kiểm tra CSRF và session; không tắt CSRF.
-- Vite proxy `/api`, `/login`, `/logout` sang Spring Boot. Dùng cookie session HttpOnly; không lưu token vào localStorage.
-- Đây là **giao diện Admin**, không chuyển các dữ liệu giả về lịch sử khám/đơn thuốc của trang Patient sang Admin.
-- Cấu trúc JSON của `DoctorResponse` cần đối chiếu với DTO thực trong dự án; component có fallback một số tên trường phổ biến.
-- Không thay đổi Backend hoặc nhánh Git, chỉ chép file vào `Frontend` và commit có chọn lọc.
+Các nút duyệt/từ chối/đình chỉ/kích hoạt lại bác sĩ bị vô hiệu hóa vì Service đang trả 501. Theo dõi giao dịch Blockchain chờ nhóm cung cấp API thật. Không khóa ADMIN/DOCTOR qua màn hình người dùng.
+
+## Các màn hình quản trị
+
+| Route | Trang và phạm vi |
+|---|---|
+| `/` | Dashboard, 6 số liệu từ Backend |
+| `/users` | Tìm kiếm/lọc/phân trang, chi tiết và khóa/mở khóa PATIENT |
+| `/doctors` | Danh sách, nhóm trạng thái qua GET search, PENDING, chi tiết; hành động ghi chưa khả dụng |
+| `/audit-logs` | Nhật ký quản trị và phân trang |
+| `/transactions` | Giao diện chờ tích hợp; không gọi API giao dịch, không có hash/số lượng giả |
+| `/profile` | Thông tin chỉ đọc từ `/api/admin/me` |
+| `/system-status` | Kiểm tra lại 6 GET hiện có, kết quả từng endpoint và thời điểm kiểm tra |
+| Đường dẫn khác | Trang 404, giữ URL và có nút về Dashboard |
+
+System Status gọi GET `/api/admin/health`, `/api/admin/me`, `/api/admin/dashboard`, `/api/admin/users`, `/api/admin/doctors/search`, `/api/admin/audit-logs`. Các danh sách giới hạn một bản ghi; trang chỉ giữ kết quả kiểm tra, không hiển thị hoặc lưu dữ liệu cá nhân từ các request đó. Kết quả là ảnh chụp tại thời điểm kiểm tra, không theo dõi nền liên tục. `/health` hiện chỉ trả trạng thái Admin API, không phải API giám sát hạ tầng chuyên dụng. Supabase/PostgreSQL, Blockchain RPC và Smart Contract luôn ghi chưa thể xác minh.
+
+Transactions có component trình bày `BangGiaoDich`, hỗ trợ loading, lỗi/thử lại, nội dung bảng và thông tin phân trang qua props. Route hiện tại không gắn nguồn API; bộ lọc và phân trang bị vô hiệu hóa. Khi nhóm cung cấp DTO/API thật mới thêm adapter trong `services/`, dữ liệu bảng và xác thực mạng/chain ID/hash trước khi tạo explorer link. Không có giả định mạng hay endpoint giao dịch trong bản hiện tại.
+
+Nhóm nhanh bác sĩ giữ từ khóa đã áp dụng và gọi bộ lọc Backend; chuyển sang danh sách PENDING rồi trở lại không đặt lại trang tìm kiếm trước đó. Bốn nút hành động có giải thích riêng, không gắn request POST.
+
+## Kiểm tra
+
+```powershell
+npm.cmd test
+npm.cmd run lint
+npm.cmd run build
+```
+
+Test hồi quy bằng Node không cần thư viện bổ sung. Fetch và DOMParser được giả lập để kiểm tra hợp đồng session, Form Login, CSRF, lỗi mạng/HTTP và mã hóa bộ lọc. Kết quả này không thay thế kiểm thử tích hợp Spring Security và database thật.
+
+Checklist tích hợp với môi trường được nhóm cho phép:
+
+1. Đăng nhập đúng/sai, tải lại URL `/users`, đăng xuất và thử truy cập lại.
+2. Dashboard, tìm kiếm/lọc/phân trang, chi tiết tài khoản/bác sĩ, PENDING và nhật ký.
+3. Chỉ sau khi được cho phép ghi database: khóa/mở khóa PATIENT thử nghiệm và xác minh nhật ký.
+4. Kiểm tra hết phiên, CSRF sai, Backend dừng, mạng chậm, màn hình 320/390/768/1440px.
+
+Không tìm thấy `trang1.html`, `trang2.html`, `trang3.html` trong repository ở lần khảo sát này. Giao diện kế thừa CSS hiện có và bảng màu trong yêu cầu; cần cung cấp lại HTML để đối chiếu thiết kế gốc.
+
+## Git
+
+Chỉ làm việc trên `Bra_Admin`. Trước khi commit, chạy `git status`, `git branch --show-current`, `git diff --check`, xem lại diff và chỉ stage file Frontend có chủ đích. Không tự commit, push, chuyển/tạo nhánh, merge, rebase hoặc xóa dữ liệu.
