@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chi tiết hồ sơ khám | MediCare Profile</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <style>
+        :root {
+          --med-primary: #0d6efd;
+          --med-dark: #0a4d8c;
+          --med-teal: #10b981;
+          --med-bg: #f1f5f9;
+          --med-border: #e2e8f0;
+        }
+
+        body {
+          background-color: var(--med-bg);
+          font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+          color: #1e293b;
+          font-size: 0.96rem;
+        }
+
+        /* Navbar đồng bộ */
+        .navbar-medical {
+          background: linear-gradient(135deg, var(--med-dark), var(--med-primary));
+          box-shadow: 0 2px 12px rgba(13, 110, 253, 0.2);
+        }
+
+        /* Thẻ bệnh án & Đơn thuốc */
+        .medical-card {
+          background: #ffffff;
+          border-radius: 16px;
+          border: 1px solid var(--med-border);
+          box-shadow: 0 10px 30px -5px rgba(15, 23, 42, 0.06);
+          overflow: hidden;
+        }
+
+        .doc-banner {
+          background: linear-gradient(135deg, #0a4d8c 0%, #0d6efd 100%);
+          color: #ffffff;
+          padding: 1.6rem 2rem;
+          position: relative;
+        }
+
+        .doc-banner::after {
+          content: "";
+          position: absolute;
+          right: -30px;
+          top: -30px;
+          width: 180px;
+          height: 180px;
+          border-radius: 50%;
+          background: rgba(255, 255, 255, 0.06);
+          pointer-events: none;
+        }
+
+        .doc-section {
+          padding: 1.45rem 1.85rem;
+          border-bottom: 1px solid #f1f5f9;
+        }
+
+        .doc-section:last-child {
+          border-bottom: none;
+        }
+
+        .section-heading {
+          font-size: 0.86rem;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          color: var(--med-dark);
+          margin-bottom: 0.95rem;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+
+        .section-heading i {
+          width: 28px;
+          height: 28px;
+          border-radius: 8px;
+          background: #e0f2fe;
+          color: var(--med-primary);
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 0.95rem;
+        }
+
+        /* Lưới thông tin hành chính */
+        .meta-box {
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 12px;
+          padding: 1rem 1.25rem;
+        }
+
+        .meta-label {
+          font-size: 0.78rem;
+          color: #64748b;
+          margin-bottom: 0.15rem;
+        }
+
+        .meta-value {
+          font-weight: 600;
+          color: #0f172a;
+        }
+
+        /* Thẻ chỉ số sinh hiệu */
+        .vital-card {
+          background: #ffffff;
+          border: 1px solid #e2e8f0;
+          border-radius: 12px;
+          padding: 0.75rem 0.6rem;
+          text-align: center;
+          transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .vital-card:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(13, 110, 253, 0.08);
+          border-color: #bae6fd;
+        }
+
+        .vital-label {
+          font-size: 0.74rem;
+          color: #64748b;
+          margin-bottom: 0.15rem;
+        }
+
+        .vital-val {
+          font-size: 1.05rem;
+          font-weight: 700;
+          color: var(--med-dark);
+        }
+
+        .vital-unit {
+          font-size: 0.73rem;
+          font-weight: 500;
+          color: #94a3b8;
+        }
+
+        /* Khối chẩn đoán */
+        .diagnosis-callout {
+          background: linear-gradient(to right, #ecfdf5, #f0fdf4);
+          border: 1px solid #a7f3d0;
+          border-left: 5px solid var(--med-teal);
+          border-radius: 10px;
+          padding: 0.95rem 1.2rem;
+        }
+
+        /* File xét nghiệm */
+        .attachment-card {
+          display: flex;
+          align-items: center;
+          gap: 0.85rem;
+          padding: 0.8rem 1rem;
+          border: 1px solid #e2e8f0;
+          border-radius: 12px;
+          background: #ffffff;
+          transition: all 0.2s ease;
+        }
+
+        .attachment-card:hover {
+          border-color: var(--med-primary);
+          background: #f8fbff;
+          box-shadow: 0 4px 12px rgba(13, 110, 253, 0.07);
+        }
+
+        .file-badge {
+          width: 40px;
+          height: 40px;
+          border-radius: 10px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 1.2rem;
+          color: #fff;
+          flex-shrink: 0;
+        }
+
+        .file-badge.pdf { background: linear-gradient(135deg, #ef4444, #dc2626); }
+        .file-badge.img { background: linear-gradient(135deg, #10b981, #059669); }
+        .file-badge.doc { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+
+        /* Ghim cố định cột đơn thuốc bên phải khi cuộn chuột */
+        @media (min-width: 1200px) {
+          .rx-sticky-col {
+            position: sticky;
+            top: 84px;
+            align-self: flex-start;
+            z-index: 10;
+          }
+
+          .rx-sticky-col .medical-card {
+            max-height: calc(100vh - 104px);
+            overflow-y: auto;
+          }
+        }
+
+        .rx-banner {
+          background: linear-gradient(135deg, #0f766e 0%, #0d9488 100%);
+          color: #ffffff;
+          padding: 1.5rem 1.75rem;
+        }
+
+        .rx-step {
+          width: 28px;
+          height: 28px;
+          border-radius: 50%;
+          background: #ccfbf1;
+          color: #0f766e;
+          font-weight: 700;
+          font-size: 0.82rem;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+
+        .signature-box {
+          border-top: 1px dashed #94a3b8;
+          padding-top: 0.45rem;
+          margin-top: 2.75rem;
+          font-size: 0.8rem;
+          color: #64748b;
+        }
+
+        footer {
+          background: var(--med-dark);
+          color: rgba(255, 255, 255, 0.85);
+          font-size: 0.875rem;
+        }
+
+        @media print {
+          .no-print { display: none !important; }
+          body { background: #fff; }
+          .medical-card { box-shadow: none; border: 1px solid #ccc; margin-bottom: 1rem; }
+          .rx-sticky-col { position: static; }
+          .rx-sticky-col .medical-card { max-height: none; overflow: visible; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Navbar -->
+<nav class="navbar navbar-expand-lg navbar-dark navbar-medical sticky-top no-print">
+    <div class="container-fluid px-3 px-xl-5">
+        <a class="navbar-brand fw-bold" href="records.html">
+            <i class="bi bi-heart-pulse-fill me-2"></i>MediCare Profile
+        </a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ms-auto align-items-lg-center">
+                <li class="nav-item"><a class="nav-link" href="records.html"><i class="bi bi-person-vcard me-1"></i> Hồ sơ BN</a></li>
+                <li class="nav-item"><a class="nav-link active" href="records.html"><i class="bi bi-clipboard2-pulse me-1"></i> Lịch sử khám</a></li>
+                <li class="nav-item"><a class="nav-link" href="#"><i class="bi bi-shield-lock me-1"></i> Phân quyền BS</a></li>
+                <li class="nav-item"><a class="nav-link" href="#"><i class="bi bi-file-earmark-medical me-1"></i> Kết quả</a></li>
+            </ul>
+        </div>
+    </div>
+</nav>
+
+<!-- Khung nội dung mở rộng toàn chiều ngang -->
+<div class="container-fluid px-3 px-xl-5 py-4" style="max-width: 1680px;">
+
+    <!-- Thanh điều hướng & Thao tác -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2 no-print">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-0">
+                <li class="breadcrumb-item"><a href="records.html" class="text-decoration-none">Lịch sử khám</a></li>
+                <li class="breadcrumb-item active fw-semibold" aria-current="page" id="bcRecordCode">—</li>
+            </ol>
+        </nav>
+        <div class="d-flex gap-2">
+            <a href="records.html" class="btn btn-outline-secondary btn-sm rounded-3 px-3">
+                <i class="bi bi-arrow-left me-1"></i> Quay lại danh sách
+            </a>
+            <button type="button" class="btn btn-primary btn-sm rounded-3 px-3" onclick="window.print()">
+                <i class="bi bi-printer me-1"></i> In phiếu khám & Đơn thuốc
+            </button>
+        </div>
+    </div>
+
+    <!-- Thông báo lỗi nếu có -->
+    <div id="detailError" class="alert alert-danger d-none" role="alert"></div>
+
+    <!-- BỐ CỤC 2 CỘT SONG SONG: TRÁI (BỆNH ÁN) - PHẢI (ĐƠN THUỐC CỐ ĐỊNH) -->
+    <div class="row g-4 align-items-start">
+
+        <!-- ==================== CỘT TRÁI: PHIẾU HỒ SƠ KHÁM BỆNH ==================== -->
+        <div class="col-12 col-xl-7">
+            <div class="medical-card">
+
+                <!-- Banner tiêu đề phiếu -->
+                <div class="doc-banner">
+                    <div class="row align-items-center g-3">
+                        <div class="col-md-7">
+                            <div class="d-flex align-items-center gap-2 mb-1">
+                                <span class="badge bg-white text-primary fw-semibold">BỆNH ÁN ĐIỆN TỬ</span>
+                                <span class="badge bg-info text-dark fw-semibold" id="docVersionBadge">v1</span>
+                            </div>
+                            <h3 class="mb-1 fw-bold">HỒ SƠ KHÁM BỆNH</h3>
+                            <div class="opacity-75 small">
+                                <i class="bi bi-hospital me-1"></i>Phòng khám Đa khoa MediCare · Chuyên khoa <span id="docBannerSpecialty">—</span>
+                            </div>
+                        </div>
+                        <div class="col-md-5 text-md-end">
+                            <div class="fs-5 fw-bold" id="docRecordCode">—</div>
+                            <div class="small opacity-90 mb-2">
+                                <i class="bi bi-calendar-event me-1"></i><span id="docVisitAt">—</span>
+                            </div>
+                            <span class="badge bg-light text-dark px-3 py-1 rounded-pill" id="docStatusBadge">Đang tải...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 1. Thông tin hành chính -->
+                <div class="doc-section">
+                    <div class="section-heading">
+                        <i class="bi bi-person-vcard"></i> 1. Thông tin bệnh nhân & Lần khám
+                    </div>
+                    <div class="meta-box">
+                        <div class="row g-3">
+                            <div class="col-6 col-md-3">
+                                <div class="meta-label">Họ và tên bệnh nhân</div>
+                                <div class="meta-value" id="ptFullName">—</div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="meta-label">Mã bệnh nhân</div>
+                                <div class="meta-value text-primary" id="ptCode">—</div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="meta-label">Ngày sinh / Tuổi</div>
+                                <div class="meta-value" id="ptDob">—</div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="meta-label">Giới tính / Nhóm máu</div>
+                                <div class="meta-value" id="ptGenderBlood">—</div>
+                            </div>
+                            <div class="col-12"><hr class="my-1 opacity-10"></div>
+                            <div class="col-6 col-md-3">
+                                <div class="meta-label">Chuyên khoa</div>
+                                <div class="meta-value" id="docSpecialty">—</div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="meta-label">Bác sĩ phụ trách</div>
+                                <div class="meta-value" id="docDoctor">—</div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="meta-label">Phòng khám</div>
+                                <div class="meta-value" id="docRoomName">—</div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="meta-label">Hình thức khám</div>
+                                <div class="meta-value" id="docVisitType">—</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. Chỉ số sinh hiệu -->
+                <div class="doc-section">
+                    <div class="section-heading">
+                        <i class="bi bi-heart-pulse"></i> 2. Chỉ số sinh hiệu
+                    </div>
+                    <div class="row row-cols-2 row-cols-sm-4 row-cols-md-7 g-2">
+                        <div class="col">
+                            <div class="vital-card">
+                                <div class="vital-label">Huyết áp</div>
+                                <div class="vital-val" id="vitalBp">—</div>
+                                <div class="vital-unit">mmHg</div>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <div class="vital-card">
+                                <div class="vital-label">Nhịp tim</div>
+                                <div class="vital-val" id="vitalHr">—</div>
+                                <div class="vital-unit">bpm</div>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <div class="vital-card">
+                                <div class="vital-label">Nhiệt độ</div>
+                                <div class="vital-val" id="vitalTemp">—</div>
+                                <div class="vital-unit">°C</div>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <div class="vital-card">
+                                <div class="vital-label">SpO₂</div>
+                                <div class="vital-val" id="vitalSpo2">—</div>
+                                <div class="vital-unit">%</div>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <div class="vital-card">
+                                <div class="vital-label">Cân nặng</div>
+                                <div class="vital-val" id="vitalWeight">—</div>
+                                <div class="vital-unit">kg</div>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <div class="vital-card">
+                                <div class="vital-label">Chiều cao</div>
+                                <div class="vital-val" id="vitalHeight">—</div>
+                                <div class="vital-unit">cm</div>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <div class="vital-card">
+                                <div class="vital-label">Chỉ số BMI</div>
+                                <div class="vital-val text-success" id="vitalBmi">—</div>
+                                <div class="vital-unit">kg/m²</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. Lý do khám & Chẩn đoán -->
+                <div class="doc-section">
+                    <div class="row g-4">
+                        <div class="col-md-5">
+                            <div class="section-heading">
+                                <i class="bi bi-chat-square-text"></i> 3. Triệu chứng / Lý do khám
+                            </div>
+                            <ul class="ps-3 mb-0 text-secondary" style="line-height: 1.7;" id="docReasonList">
+                                <li class="text-muted">Đang tải dữ liệu...</li>
+                            </ul>
+                        </div>
+
+                        <div class="col-md-7">
+                            <div class="section-heading">
+                                <i class="bi bi-clipboard2-check"></i> 4. Kết luận chẩn đoán
+                            </div>
+                            <div class="diagnosis-callout mb-3">
+                                <div class="small text-success fw-bold text-uppercase mb-1">Chẩn đoán chính</div>
+                                <div class="fw-bold fs-6 text-dark" id="docDiagnosis">—</div>
+                            </div>
+                            <div class="small mb-1">
+                                <span class="text-muted">Chẩn đoán kèm theo:</span>
+                                <span class="fw-semibold text-dark" id="docSecondaryDiagnosis">—</span>
+                            </div>
+                            <div class="small">
+                                <span class="text-muted">Hướng xử trí:</span>
+                                <span class="fw-semibold text-dark" id="docTreatmentDirection">—</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5. Kết quả xét nghiệm đính kèm -->
+                <div class="doc-section">
+                    <div class="section-heading">
+                        <i class="bi bi-paperclip"></i> 5. Kết quả xét nghiệm & Chẩn đoán hình ảnh
+                    </div>
+                    <div class="row g-2" id="docAttachmentsContainer">
+                        <div class="col-12 text-muted small">Đang tải tệp đính kèm...</div>
+                    </div>
+                </div>
+
+                <!-- 6. Lời dặn của bác sĩ & Chữ ký -->
+                <div class="doc-section">
+                    <div class="row align-items-end g-4">
+                        <div class="col-md-8">
+                            <div class="section-heading">
+                                <i class="bi bi-journal-medical"></i> 6. Ghi chú & Lời dặn của bác sĩ
+                            </div>
+                            <p class="text-secondary mb-3" style="line-height: 1.7;" id="docNote">—</p>
+                            <div class="d-none align-items-center gap-2 px-3 py-2 rounded-3 bg-primary-subtle text-primary small fw-semibold" id="docNextVisitBox">
+                                <i class="bi bi-calendar2-check-fill"></i>
+                                <span id="docNextVisitText"></span>
+                            </div>
+                        </div>
+                        <div class="col-md-4 text-center">
+                            <div class="small text-muted" id="docSignDate">—</div>
+                            <div class="fw-bold text-dark mt-1">Bác sĩ khám bệnh</div>
+                            <div class="text-primary fw-semibold mt-1" id="docSignDoctor">—</div>
+                            <div class="signature-box">Đã ký xác nhận điện tử</div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- ==================== CỘT PHẢI: ĐƠN THUỐC ĐIỀU TRỊ (CỐ ĐỊNH) ==================== -->
+        <div class="col-12 col-xl-5 rx-sticky-col">
+            <div class="medical-card">
+                <div class="rx-banner">
+                    <div class="d-flex justify-content-between align-items-start gap-2">
+                        <div>
+                            <span class="badge bg-white text-success fw-semibold mb-1">TOA THUỐC ĐIỆN TỬ</span>
+                            <h4 class="mb-1 fw-bold"><i class="bi bi-capsule-pill me-2"></i>ĐƠN THUỐC ĐIỀU TRỊ</h4>
+                            <div class="small opacity-75">Kèm theo hồ sơ <span id="rxRecordCode">—</span></div>
+                        </div>
+                        <div class="text-end small">
+                            <div>Ngày kê: <strong id="rxDate">—</strong></div>
+                            <div class="opacity-90">BN: <strong id="rxPatientName">—</strong></div>
+                            <div class="opacity-75">Mã: <span id="rxPatientCode">—</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-4">
+                    <div class="table-responsive">
+                        <table class="table align-middle mb-3">
+                            <thead class="table-light">
+                            <tr class="small text-uppercase text-muted">
+                                <th style="width: 44px;">#</th>
+                                <th>Tên thuốc & Cách dùng</th>
+                                <th class="text-end" style="width: 90px;">Số lượng</th>
+                            </tr>
+                            </thead>
+                            <tbody id="rxTableBody">
+                            <tr>
+                                <td colspan="3" class="text-center text-muted py-4">Đang tải đơn thuốc...</td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="alert alert-warning border-0 bg-warning-subtle text-dark small mb-4">
+                        <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>
+                        <strong>Lưu ý dùng thuốc:</strong> <span id="rxGeneralNote">Uống thuốc đúng giờ, không tự ý ngưng thuốc hoặc thay đổi liều lượng. Nếu có dấu hiệu bất thường hãy liên hệ ngay với bác sĩ.</span>
+                    </div>
+
+                    <div class="row justify-content-end">
+                        <div class="col-7 col-sm-6 text-center">
+                            <div class="fw-bold text-dark">Bác sĩ kê đơn</div>
+                            <div class="text-primary fw-semibold mt-1" id="rxDoctorName">—</div>
+                            <div class="signature-box">Đã ký xác nhận điện tử</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- Footer -->
+<footer class="py-3 mt-5 no-print">
+    <div class="container-fluid px-3 px-xl-5 text-center">
+        <p class="mb-0">© 2026 MediCare Profile · Hệ thống hồ sơ sức khỏe điện tử · Dành cho mục đích demo</p>
+    </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="js/common.js"></script>
+<script src="js/record-detail.js"></script>
+</body>
+</html>

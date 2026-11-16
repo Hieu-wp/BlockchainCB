@@ -1,0 +1,10 @@
+package com.example.medical.repository;
+
+import com.example.medical.entity.PrescriptionItem;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.List;
+
+public interface PrescriptionItemRepository extends JpaRepository<PrescriptionItem, Long> {
+    List<PrescriptionItem> findByRecordVersionIdOrderBySortOrderAsc(Long versionId);
+}
