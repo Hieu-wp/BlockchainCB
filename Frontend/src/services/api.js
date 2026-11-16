@@ -156,9 +156,14 @@ export async function yeuCau(duongDan, tuyChon = {}) {
   let duLieu = null
 
   if (phanHoi.status !== 204) {
-    duLieu = contentType.includes('application/json')
-      ? await phanHoi.json()
-      : contentType.includes('text/html') ? null : await phanHoi.text()
+    try {
+      duLieu = contentType.includes('application/json') || contentType.includes('+json')
+        ? await phanHoi.json()
+        : contentType.includes('text/html') ? null : await phanHoi.text()
+    } catch {
+      if (!phanHoi.ok) throw loiHttp(phanHoi.status, `Yêu cầu thất bại (HTTP ${phanHoi.status}); phản hồi lỗi không hợp lệ.`)
+      throw new Error('Phản hồi dữ liệu không hợp lệ. Chưa xác nhận kết quả yêu cầu.')
+    }
   }
 
   if (!phanHoi.ok) {

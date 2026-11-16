@@ -1,4 +1,4 @@
--- Chỉ fixture của PostgreSQL tạm do test khởi tạo. KHÔNG chạy trên Supabase.
+-- Chỉ fixture của database tạm do test khởi tạo (PostgreSQL/H2). KHÔNG chạy trên Supabase.
 CREATE TABLE public.users (
     id BIGSERIAL PRIMARY KEY, email VARCHAR(255) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL, full_name VARCHAR(255) NOT NULL,
@@ -18,5 +18,5 @@ CREATE TABLE public.admin_audit_logs (
     id BIGSERIAL PRIMARY KEY, admin_id BIGINT NOT NULL REFERENCES public.users(id),
     action VARCHAR(64) NOT NULL CHECK (action IN ('USER_LOCK','USER_UNLOCK','DOCTOR_REJECT','DOCTOR_APPROVE','DOCTOR_SUSPEND','DOCTOR_REACTIVATE')),
     target_type VARCHAR(64) NOT NULL, target_id BIGINT NOT NULL,
-    description VARCHAR(500) NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    description VARCHAR(500) NOT NULL, created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

@@ -27,6 +27,14 @@ import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.*;
 import static org.junit.jupiter.api.Assertions.*;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.MockMvcPrint;
+import org.springframework.mock.web.MockHttpSession;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.web.servlet.MockMvc;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /** Chỉ chạy bằng profile postgres-it: PostgreSQL mới, port ngẫu nhiên, không nhận URL bên ngoài. */
 @SpringBootTest(properties = {
@@ -35,6 +43,7 @@ import static org.junit.jupiter.api.Assertions.*;
         "spring.sql.init.mode=always",
         "spring.sql.init.schema-locations=classpath:postgres-test-schema.sql"
 })
+@AutoConfigureMockMvc(print = MockMvcPrint.NONE)
 class PostgresAdminIT {
     static final EmbeddedPostgres postgres = khoiTaoPostgres();
     static EmbeddedPostgres khoiTaoPostgres() {
@@ -61,6 +70,8 @@ class PostgresAdminIT {
     @Autowired AdminAuditLogService nhatKy;
     @Autowired PlatformTransactionManager quanLyGiaoDich;
     @Autowired DataSource dataSource;
+    @Autowired MockMvc mvc;
+    @Autowired PasswordEncoder passwordEncoder;
     @PersistenceContext EntityManager entityManager;
 
     static void dangNhapAdmin() {
@@ -86,6 +97,73 @@ class PostgresAdminIT {
     String trangThaiBacSi() { return jdbc.queryForObject("SELECT approval_status FROM public.doctors WHERE id=7", String.class); }
     boolean patientHoatDong() { return Boolean.TRUE.equals(jdbc.queryForObject("SELECT enabled FROM public.users WHERE id=3", Boolean.class)); }
     long soAudit() { return jdbc.queryForObject("SELECT count(*) FROM public.admin_audit_logs", Long.class); }
+
+    // Chỉ tài khoản trong PostgreSQL tạm của class này; không dùng thông tin đăng nhập thật.
+    MockHttpSession phienHttp(String email) throws Exception {
+        SecurityContextHolder.clearContext();
+        jdbc.update("UPDATE public.users SET password_hash=? WHERE email=?", passwordEncoder.encode("isolated-test-only"), email);
+        var ketQua = mvc.perform(post("/login").with(csrf()).param("username", email).param("password", "isolated-test-only"))
+                .andExpect(status().isOk()).andReturn();
+        return (MockHttpSession) ketQua.getRequest().getSession(false);
+    }
+
+    @Test void httpSessionVaCacDtoDocTuPostgres() throws Exception {
+        MockHttpSession phien = phienHttp("admin@example.test");
+        for (int lan = 0; lan < 2; lan++) mvc.perform(get("/api/admin/me").session(phien))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.daXacThuc").value(true))
+                .andExpect(jsonPath("$.vaiTro").value("ADMIN"))
+                .andExpect(jsonPath("$.danhSachQuyen", org.hamcrest.Matchers.hasItem("ROLE_ADMIN")));
+        mvc.perform(get("/api/admin/dashboard").session(phien)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.tongNguoiDung").value(4)).andExpect(jsonPath("$.tongBenhNhan").value(1))
+                .andExpect(jsonPath("$.tongTaiKhoanVaiTroDoctor").value(1)).andExpect(jsonPath("$.tongHoSoBacSi").value(1))
+                .andExpect(jsonPath("$.bacSiChoDuyet").value(1)).andExpect(jsonPath("$.taiKhoanDangHoatDong").value(4));
+        mvc.perform(get("/api/admin/users").session(phien).param("vaiTro", "PATIENT").param("trangThai", "ACTIVE").param("tuKhoa", "patient"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.tongPhanTu").value(1))
+                .andExpect(jsonPath("$.danhSachNguoiDung[0].maNguoiDung").value(3));
+        mvc.perform(get("/api/admin/users/3").session(phien)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value("patient@example.test"))
+                .andExpect(jsonPath("$.password_hash").doesNotExist()).andExpect(jsonPath("$.matKhauMaHoa").doesNotExist());
+        for (String path : List.of("/api/admin/doctors", "/api/admin/doctors/pending")) {
+            mvc.perform(get(path).session(phien)).andExpect(status().isOk())
+                    .andExpect(jsonPath("$[0].maBacSi").value(7)).andExpect(jsonPath("$[0].trangThaiPheDuyet").value("PENDING"));
+        }
+        mvc.perform(get("/api/admin/doctors/search").session(phien).param("trangThaiPheDuyet", "PENDING"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(1)).andExpect(jsonPath("$.content[0].maBacSi").value(7));
+        mvc.perform(get("/api/admin/doctors/7").session(phien)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.soGiayPhep").value("GP-TEST"))
+                .andExpect(jsonPath("$.matKhauCu").doesNotExist()).andExpect(jsonPath("$.password").doesNotExist());
+        mvc.perform(get("/api/admin/audit-logs").session(phien)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.tongPhanTu").value(0)).andExpect(jsonPath("$.danhSachNhatKy").isEmpty());
+    }
+
+    @Test void httpRejectCsrfValidationVaAuditTuPostgres() throws Exception {
+        MockHttpSession phien = phienHttp("admin@example.test");
+        mvc.perform(post("/api/admin/doctors/7/reject").session(phien).contentType("application/json").content("{\"lyDo\":\"Thiếu giấy phép\"}"))
+                .andExpect(status().isForbidden());
+        assertEquals(0, soAudit()); assertEquals("PENDING", trangThaiBacSi());
+        mvc.perform(post("/api/admin/doctors/7/reject").session(phien).with(csrf()).contentType("application/json").content("{\"lyDo\":\" \"}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/api/admin/doctors/7/reject").session(phien).with(csrf()).contentType("application/json").content("{\"lyDo\":\"Thiếu giấy phép\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.maBacSi").value(7)).andExpect(jsonPath("$.trangThaiPheDuyet").value("REJECTED"));
+        mvc.perform(get("/api/admin/doctors/pending").session(phien)).andExpect(status().isOk()).andExpect(jsonPath("$").isEmpty());
+        mvc.perform(get("/api/admin/doctors/search").session(phien).param("trangThaiPheDuyet", "REJECTED"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content[0].maBacSi").value(7));
+        mvc.perform(get("/api/admin/audit-logs").session(phien)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.tongPhanTu").value(1)).andExpect(jsonPath("$.danhSachNhatKy[0].hanhDong").value("DOCTOR_REJECT"));
+        mvc.perform(post("/api/admin/doctors/7/reject").session(phien).with(csrf()).contentType("application/json").content("{\"lyDo\":\"Thiếu giấy phép\"}"))
+                .andExpect(status().isConflict());
+        assertEquals(1, soAudit());
+    }
+
+    @Test void httpDangXuatVaCamPatientTruyCapAdmin() throws Exception {
+        MockHttpSession patient = phienHttp("patient@example.test");
+        mvc.perform(get("/api/admin/me").session(patient)).andExpect(status().isForbidden());
+        MockHttpSession admin = phienHttp("admin@example.test");
+        mvc.perform(post("/logout").session(admin).with(csrf())).andExpect(status().is3xxRedirection());
+        assertTrue(admin.isInvalid());
+        mvc.perform(get("/api/admin/me")).andExpect(status().is3xxRedirection());
+        mvc.perform(get("/api/admin/dashboard")).andExpect(status().is3xxRedirection());
+    }
     void maLoi(int ma, Runnable thaoTac) { assertEquals(ma, assertThrows(ResponseStatusException.class, thaoTac::run).getStatusCode().value()); }
 
     @Test void jpaVaJdbcChungPostgresTransactionThuc() {

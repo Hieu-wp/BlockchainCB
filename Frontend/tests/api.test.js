@@ -140,6 +140,18 @@ test('Hồi quy xác thực session và các yêu cầu quản trị', async kie
       }
       await apiAdmin.nguoiDung({ tuKhoa: 'Tên & email', trang: 2 })
     })
+    await kiemThu.test('Đọc ProblemDetail application/problem+json và giữ lỗi nghiệp vụ', async () => {
+      globalThis.fetch = async url => phanHoi(url, { detail: 'Hồ sơ không còn PENDING' }, 409, 'application/problem+json')
+      await assert.rejects(yeuCau('/api/admin/doctors/7/reject'), { status: 409, message: 'Hồ sơ không còn PENDING' })
+    })
+    await kiemThu.test('JSON lỗi bị hỏng không làm mất mã HTTP hoặc lộ nội dung phản hồi', async () => {
+      globalThis.fetch = async () => new Response('noi-dung-khong-phai-json', { status: 400, headers: { 'content-type': 'application/json' } })
+      await assert.rejects(yeuCau('/api/admin/doctors/7'), { status: 400, message: 'Yêu cầu thất bại (HTTP 400); phản hồi lỗi không hợp lệ.' })
+    })
+    await kiemThu.test('JSON thành công bị hỏng không xác nhận thao tác thành công', async () => {
+      globalThis.fetch = async () => new Response('{', { headers: { 'content-type': 'application/json' } })
+      await assert.rejects(yeuCau('/api/admin/doctors/7'), /Chưa xác nhận kết quả/)
+    })
     await kiemThu.test('Response 204 không gây lỗi parse JSON', async () => {
       globalThis.fetch = async () => new Response(null, { status: 204 })
       assert.equal(await yeuCau('/api/admin/dashboard'), null)
