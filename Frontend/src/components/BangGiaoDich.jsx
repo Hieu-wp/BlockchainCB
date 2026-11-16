@@ -4,7 +4,7 @@ import { DangTai, ThongBaoLoi, PhanTrang } from './Shared'
 // Khung hiển thị độc lập API. Chỉ gắn dòng dữ liệu sau khi nhóm xác nhận DTO thật.
 export default function BangGiaoDich({ dangTai = false, loi = null, thuLai, children, phanTrang, nhanNguon = 'Chưa có nguồn dữ liệu' }) {
   return <section className="panel" aria-label="Danh sách nhật ký giao dịch Blockchain">
-    <div className="panel-head"><h2>Nhật ký giao dịch Blockchain</h2><span className="pill neutral">{nhanNguon}</span></div>
+    <div className="panel-head"><h2>Nhật ký giao dịch</h2><span className="pill neutral">{nhanNguon}</span></div>
     {dangTai ? <DangTai/> : loi ? <div className="panel-body"><ThongBaoLoi loi={loi} onRetry={thuLai}/></div> :
       <><div className="table-wrap" tabIndex={0} role="region" aria-label="Bảng nhật ký giao dịch Blockchain, cuộn ngang để xem đầy đủ">
         <table className="medical-table"><thead><tr>

@@ -3,6 +3,18 @@
 @media(max-width:1200px){.stat-grid{grid-template-columns:repeat(2,1fr)}.filter-grid{grid-template-columns:repeat(2,1fr)}.filter-grid .btn{align-self:end}.main-content{padding:28px}.topbar{padding:0 28px}}@media(max-width:850px){.sidebar{position:fixed;left:0;transform:translateX(-100%);transition:transform .2s}.sidebar-open{transform:translateX(0)}.sidebar-overlay{display:block;position:fixed;inset:0;background:#092c4c88;z-index:15}.menu-toggle,.close-sidebar{display:grid;place-items:center;background:transparent;border:0;color:#325e83}.close-sidebar{margin-left:auto;color:#fff}.two-col{grid-template-columns:1fr}.connection-status{display:none}.login-bg{grid-template-columns:1fr}.login-deco{display:none}.login-card{padding:50px 24px}.login-brand{margin-bottom:45px}}@media(max-width:600px){.topbar{padding:0 18px;height:67px}.main-content{padding:21px 15px}.page-heading{align-items:flex-start}.page-heading h1{font-size:23px}.page-heading p{font-size:12px}.stat-grid{gap:10px}.stat-card{padding:15px;min-height:113px;display:block}.stat-icon{height:37px;width:37px;border-radius:10px;margin-bottom:10px}.stat-icon svg{width:19px}.stat-content>div{white-space:normal}.stat-content strong{font-size:23px}.stat-content small{display:none}.filter-grid,.doctors-filter{grid-template-columns:1fr}.admin-profile>div{display:none}.topbar-right{gap:0}.pagination{gap:12px;flex-wrap:wrap}.panel-head{padding:17px}.panel-body{padding:17px}.page-heading{gap:8px;flex-wrap:wrap}.app-footer{padding:18px}}
 
 /* Hộp thoại native giữ focus và hỗ trợ Escape cho bàn phím. */
+.wallet-header{display:flex;align-items:center;gap:8px;margin-right:16px;min-width:0}
+.wallet-connect{white-space:nowrap;min-height:38px;gap:7px}
+.wallet-connect svg{flex-shrink:0}
+.wallet-notice{font-size:11px;color:#a25210;text-decoration:underline}
+.wallet-feedback{position:fixed;top:76px;right:16px;left:16px;margin-left:auto;max-width:380px;padding:14px 16px;border:1px solid #e9cbb4;border-radius:10px;background:#fff8f1;color:#82471d;font-size:12px;line-height:1.6;box-shadow:var(--shadow);z-index:30}
+.wallet-feedback a{display:block;margin-top:6px;color:#0d6efd;text-decoration:underline}
+.wallet-profile .row-actions{margin-top:18px}
+.wallet-profile .login-error{line-height:1.7;overflow-wrap:anywhere}
+.wallet-address{user-select:all;font-family:monospace}
+@media(max-width:600px){section.profile-summary>div{flex:1 1 160px;min-width:0}}
+@media(max-width:1100px){.topbar .connection-status{display:none}}
+@media(max-width:600px){.topbar-left{flex:1;min-width:0}.breadcrumb-top{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.topbar-right{flex-shrink:0;gap:8px}.wallet-header{margin-right:0}.wallet-connect{font-size:11px;padding:8px;gap:5px}.wallet-notice{display:none}.topbar{gap:8px}.topbar .admin-avatar{width:32px;height:32px}.wallet-profile .row-actions .btn{white-space:normal;justify-content:center}.wallet-profile .row-actions{align-items:stretch}.wallet-profile .row-actions>*{flex:1 1 180px}}
 .doctor-reject{width:min(520px,calc(100vw - 32px))}
 .doctor-reject textarea{display:block;width:100%;min-height:110px;margin:10px 0;padding:12px;border:1px solid #c9dfef;border-radius:8px;resize:vertical;font:inherit;box-sizing:border-box}
 .doctor-reject .modal-actions{flex-wrap:wrap}

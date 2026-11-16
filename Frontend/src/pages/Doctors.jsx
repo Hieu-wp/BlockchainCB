@@ -25,7 +25,7 @@ export default function Doctors() {
     setBoLoc(hienTai => ({ ...hienTai, trangThaiPheDuyet: trangThai }))
   }
   return <><TieuDe nhan="QUẢN LÝ NHÂN SỰ Y TẾ" tieuDe="Danh sách bác sĩ" moTa="Theo dõi hồ sơ đăng ký và trạng thái phê duyệt của bác sĩ."><LamMoi onClick={taiLai}/></TieuDe>
-    <div className="info-banner"><Info size={19}/><div><strong>Quản lý hồ sơ đăng ký</strong><span>Có thể từ chối hồ sơ PENDING kèm lý do. Phê duyệt, đình chỉ và kích hoạt lại đang chờ tích hợp Blockchain.</span></div></div>
+    <div className="info-banner"><Info size={19}/><div><strong>Quản lý hồ sơ đăng ký</strong><span>Có thể từ chối hồ sơ chờ duyệt kèm lý do. Phê duyệt, đình chỉ và kích hoạt lại đang chờ tích hợp Blockchain.</span></div></div>
     {daTuChoi && <p role="status" className="info-banner">{loi ? 'Đã từ chối hồ sơ thành công nhưng chưa làm mới được danh sách. Hãy nhấn thử lại; không cần gửi lại yêu cầu từ chối.' : dangTai ? 'Đã từ chối hồ sơ thành công. Đang làm mới danh sách...' : 'Đã từ chối hồ sơ thành công; danh sách đã được tải lại từ Backend.'}</p>}
     {loi && <ThongBaoLoi loi={loi} onRetry={taiLai}/>}
     <div className="doctor-groups" role="group" aria-label="Lọc nhanh trạng thái bác sĩ">

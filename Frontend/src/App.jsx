@@ -38,6 +38,8 @@ import AdminProfile from './pages/AdminProfile'
 import SystemStatus from './pages/SystemStatus'
 import NotFound from './pages/NotFound'
 import { HopThoai } from './components/HopThoai'
+import MetaMaskConnect from './components/MetaMaskConnect'
+import { useMetaMask } from './hooks/useMetaMask'
 
 // Các hàm gọi API Spring Boot
 import {
@@ -284,6 +286,7 @@ function DangNhap({ onDangNhap, thongBaoPhien }) {
 // =====================================================
 
 function BoCuc({ onDangXuat, phien }) {
+  const vi = useMetaMask()
   const [moMenu, setMoMenu] = useState(false)
   const [dangDangXuat, setDangDangXuat] = useState(false)
   const [loiDangXuat, setLoiDangXuat] = useState('')
@@ -478,6 +481,7 @@ function BoCuc({ onDangXuat, phien }) {
           </div>
 
           <div className="topbar-right">
+            <MetaMaskConnect vi={vi}/>
 
             {/* Trạng thái phiên đăng nhập */}
             <span className="connection-status">
@@ -532,7 +536,7 @@ function BoCuc({ onDangXuat, phien }) {
               element={<NotFound />}
             />
             <Route path="/transactions" element={<Transactions />}/>
-            <Route path="/profile" element={<AdminProfile />}/>
+            <Route path="/profile" element={<AdminProfile vi={vi}/>}/>
             <Route path="/system-status" element={<SystemStatus />}/>
           </Routes>
         </main>
@@ -631,6 +635,7 @@ function UngDung() {
   // Đã đăng nhập với quyền Admin.
   return (
     <BoCuc
+      key={phien.tenDangNhap}
       phien={phien}
       onDangXuat={() => {
         setPhien(null)

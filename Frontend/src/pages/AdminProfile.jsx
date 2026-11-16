@@ -2,8 +2,9 @@ import { ShieldCheck, UserRound, KeyRound } from 'lucide-react'
 import { apiAdmin, coQuyenAdmin } from '../services/api'
 import { useDuLieu } from '../hooks/useDuLieu'
 import { TieuDe, Hop, DangTai, ThongBaoLoi, Rong, LamMoi } from '../components/Shared'
+import MetaMaskConnect from '../components/MetaMaskConnect'
 
-export default function AdminProfile() {
+export default function AdminProfile({ vi }) {
   const { duLieu, loi, dangTai, taiLai } = useDuLieu(apiAdmin.me)
   const loiPhien = loi || (duLieu && !coQuyenAdmin(duLieu) ? new Error('Thông tin phiên không xác nhận đủ quyền ADMIN. Vui lòng đăng nhập lại.') : null)
   return <>
@@ -25,6 +26,7 @@ export default function AdminProfile() {
           <p className="field-help">Các quyền được hiển thị theo phiên hiện tại.</p>
         </Hop>
       </div>
+      <MetaMaskConnect vi={vi} chiTiet/>
     </>}
     <div className="info-banner"><ShieldCheck size={20}/><div><strong>Thông tin chỉ đọc</strong><span>Hiện chưa hỗ trợ sửa hồ sơ hoặc đổi mật khẩu trên cổng quản trị.</span></div></div>
   </>
