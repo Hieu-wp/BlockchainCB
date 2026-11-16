@@ -20,7 +20,7 @@ export default function SystemStatus() {
     <div className="info-banner"><CircleHelp size={20}/><div><strong>Chưa có API giám sát hệ thống chuyên dụng.</strong><span>Kiểm tra Admin API chỉ xác minh phản hồi HTTP và cấu trúc dữ liệu; không chứng minh Supabase, Blockchain RPC hoặc Smart Contract đang hoạt động.</span></div></div>
     {dangTai ? <DangTai/> : loi ? <ThongBaoLoi loi={loi} onRetry={taiLai}/> : duLieu && <>
       <div className="status-summary-grid">
-        <Hop tieuDe="Kết nối Backend"><div className="status-summary"><Server size={24}/><span className={`pill ${coKhaDung && !coLoi ? 'success' : 'warning'}`}>{coKhaDung ? (coLoi ? 'Kết nối một phần, có API lỗi' : 'Các API kiểm tra có phản hồi') : coPhanHoi ? 'Chưa xác minh được Backend' : 'Chưa kết nối được'}</span></div><p className="field-help">Phản hồi HTTP lỗi có thể đến từ Backend hoặc proxy.</p></Hop>
+        <Hop tieuDe="Kết nối hệ thống"><div className="status-summary"><Server size={24}/><span className={`pill ${coKhaDung && !coLoi ? 'success' : 'warning'}`}>{coKhaDung ? (coLoi ? 'Kết nối một phần, có API lỗi' : 'Các API kiểm tra có phản hồi') : coPhanHoi ? 'Chưa xác minh được Backend' : 'Chưa kết nối được'}</span></div><p className="field-help">Phản hồi HTTP lỗi có thể đến từ Backend hoặc proxy.</p></Hop>
         <Hop tieuDe="Phiên đăng nhập"><div className="status-summary"><ShieldCheck size={24}/><span className={`pill ${phien?.trangThai === 'khaDung' ? 'success' : 'warning'}`}>{phien?.trangThai === 'khaDung' ? 'Đã xác minh quyền Admin' : 'Chưa xác minh được phiên'}</span></div></Hop>
       </div>
       <section className="panel" aria-label="Kết quả kiểm tra endpoint">

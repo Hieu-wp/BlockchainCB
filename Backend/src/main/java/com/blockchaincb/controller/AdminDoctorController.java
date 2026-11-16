@@ -171,7 +171,7 @@ public class AdminDoctorController {
      *   "lyDo": "Giấy phép hành nghề chưa hợp lệ"
      * }
      *
-     * Service hiện chưa kích hoạt nghiệp vụ này.
+     * Chỉ PENDING -> REJECTED; trạng thái và nhật ký cùng transaction.
      */
     @PostMapping("/{id}/reject")
     public ResponseEntity<DoctorResponse> tuChoiBacSi(

@@ -2,6 +2,12 @@
 package com.blockchaincb.repository;
 
 import java.util.List;
+import java.util.Optional;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import com.blockchaincb.entity.Doctor;
 
@@ -22,6 +28,16 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 public interface AdminDoctorRepository
         extends JpaRepository<Doctor, Long>,
                 JpaSpecificationExecutor<Doctor> {
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select b from Doctor b where b.maBacSi = :ma")
+    Optional<Doctor> layDeCapNhat(@Param("ma") Long maBacSi);
+
+    // Chỉ cập nhật cột phê duyệt, không ghi lại mật khẩu hoặc hồ sơ gốc.
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update Doctor b set b.trangThaiPheDuyet = 'REJECTED' "
+            + "where b.maBacSi = :ma and upper(b.trangThaiPheDuyet) = 'PENDING'")
+    int tuChoiHoSoChoDuyet(@Param("ma") Long maBacSi);
 
     /**
      * Lấy bác sĩ theo trạng thái phê duyệt.

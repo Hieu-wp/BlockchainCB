@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   BrowserRouter,
   NavLink,
@@ -37,6 +37,7 @@ import Transactions from './pages/Transactions'
 import AdminProfile from './pages/AdminProfile'
 import SystemStatus from './pages/SystemStatus'
 import NotFound from './pages/NotFound'
+import { HopThoai } from './components/HopThoai'
 
 // Các hàm gọi API Spring Boot
 import {
@@ -74,7 +75,7 @@ const menu = [
     name: 'Nhật ký quản trị',
     icon: ScrollText,
   },
-  { path: '/transactions', name: 'Giao dịch Blockchain', icon: Blocks },
+  { path: '/transactions', name: 'Nhật ký giao dịch Blockchain', icon: Blocks },
   { path: '/system-status', name: 'Trạng thái hệ thống', icon: Server },
   { path: '/profile', name: 'Hồ sơ Admin', icon: UserRound },
 ]
@@ -138,7 +139,7 @@ function DangNhap({ onDangNhap, thongBaoPhien }) {
           </span>
 
           <div>
-            <strong>BlockchainCB</strong>
+            <strong>MediCare</strong>
             <small>Medical Administration</small>
           </div>
         </div>
@@ -258,18 +259,20 @@ function DangNhap({ onDangNhap, thongBaoPhien }) {
 
       {/* Khối giới thiệu bên phải */}
       <div className="login-deco">
-        <HeartPulse size={60} />
+        <div className="login-deco-content">
+          <HeartPulse size={60} />
 
-        <h2>Quản trị y tế thông minh</h2>
+          <h2>Quản trị y tế thông minh</h2>
 
-        <p>
-          Quản lý tài khoản, bác sĩ và nhật ký
-          hoạt động trên một nền tảng thống nhất.
-        </p>
+          <p>
+            Quản lý tài khoản, bác sĩ và nhật ký
+            hoạt động trên một nền tảng thống nhất.
+          </p>
 
-        <div className="deco-line">
-          <Activity size={18} />
-          An toàn • Minh bạch • Thuận tiện
+          <div className="deco-line">
+            <Activity size={18} />
+            An toàn • Minh bạch • Thuận tiện
+          </div>
         </div>
       </div>
     </div>
@@ -284,6 +287,9 @@ function BoCuc({ onDangXuat, phien }) {
   const [moMenu, setMoMenu] = useState(false)
   const [dangDangXuat, setDangDangXuat] = useState(false)
   const [loiDangXuat, setLoiDangXuat] = useState('')
+  const [moXacNhanDangXuat, setMoXacNhanDangXuat] = useState(false)
+  const khoaDangXuat = useRef(false)
+  const nutHuyDangXuat = useRef(null)
 
   const viTri = useLocation()
 
@@ -292,7 +298,9 @@ function BoCuc({ onDangXuat, phien }) {
     if (!moMenu) return
     const cuonCu = document.body.style.overflow
     document.body.style.overflow = 'hidden'
-    const dongBangPhim = suKien => { if (suKien.key === 'Escape') setMoMenu(false) }
+    const dongBangPhim = suKien => {
+      if (suKien.key === 'Escape' && !document.querySelector('dialog[open]')) setMoMenu(false)
+    }
     window.addEventListener('keydown', dongBangPhim)
     return () => {
       document.body.style.overflow = cuonCu
@@ -306,10 +314,18 @@ function BoCuc({ onDangXuat, phien }) {
       (muc) => muc.path === viTri.pathname
     )?.name || 'Không tìm thấy trang'
 
-  // Xử lý đăng xuất.
-  const xuLyDangXuat = async () => {
-    if (dangDangXuat) return
+  // Chỉ mở hộp thoại; Hủy/Escape không gọi API và không đổi trang/bộ lọc.
+  const yeuCauDangXuat = () => {
+    if (khoaDangXuat.current) return
+    setLoiDangXuat('')
+    setMoXacNhanDangXuat(true)
+  }
 
+  // Chỉ gửi yêu cầu sau khi người dùng đồng ý, khóa ngay để chặn nhấn lặp.
+  const xuLyDangXuat = async () => {
+    if (khoaDangXuat.current) return
+
+    khoaDangXuat.current = true
     setDangDangXuat(true)
     setLoiDangXuat('')
 
@@ -321,12 +337,27 @@ function BoCuc({ onDangXuat, phien }) {
     } catch (loiDangXuat) {
       setLoiDangXuat(loiDangXuat?.message || 'Không thể đăng xuất. Vui lòng thử lại.')
     } finally {
+      khoaDangXuat.current = false
       setDangDangXuat(false)
     }
   }
 
   return (
     <div className="app-shell">
+      {moXacNhanDangXuat && <HopThoai tieuDe="Xác nhận đăng xuất"
+        dong={() => setMoXacNhanDangXuat(false)} dangGui={dangDangXuat}
+        maMoTa="mo-ta-dang-xuat" lopBoSung="logout-confirm" tieuDiemBanDau={nutHuyDangXuat}>
+        <span className="logout-confirm-icon" aria-hidden="true"><LogOut size={25}/></span>
+        <p id="mo-ta-dang-xuat">Bạn có chắc chắn muốn đăng xuất khỏi hệ thống quản trị MediCare không?</p>
+        {loiDangXuat && <div className="login-error logout-error" role="alert">{loiDangXuat}</div>}
+        <div className="modal-actions">
+          <button ref={nutHuyDangXuat} type="button" className="btn btn-outline" disabled={dangDangXuat} onClick={() => setMoXacNhanDangXuat(false)}>Hủy</button>
+          <button type="button" className="btn btn-primary" disabled={dangDangXuat} onClick={xuLyDangXuat}>
+            {dangDangXuat && <span className="spinner" aria-hidden="true"/>}
+            {dangDangXuat ? 'Đang đăng xuất...' : 'Đồng ý'}
+          </button>
+        </div>
+      </HopThoai>}
 
       {/* ================= SIDEBAR ================= */}
       <aside
@@ -343,7 +374,7 @@ function BoCuc({ onDangXuat, phien }) {
           </span>
 
           <div>
-            <strong>BlockchainCB</strong>
+            <strong>MediCare</strong>
             <small>MEDICAL ADMIN</small>
           </div>
 
@@ -399,7 +430,7 @@ function BoCuc({ onDangXuat, phien }) {
           <button
             type="button"
             className="logout-btn"
-            onClick={xuLyDangXuat}
+            onClick={yeuCauDangXuat}
             disabled={dangDangXuat}
           >
             <LogOut size={18} />
@@ -475,7 +506,6 @@ function BoCuc({ onDangXuat, phien }) {
 
         {/* Nội dung các trang */}
         <main className="main-content">
-          {loiDangXuat && <div className="error-box" role="alert">{loiDangXuat}</div>}
           <Routes>
             <Route
               path="/"
@@ -509,7 +539,7 @@ function BoCuc({ onDangXuat, phien }) {
 
         {/* Footer */}
         <footer className="app-footer">
-          © 2026 BlockchainCB ·
+          © 2026 MediCare ·
           Hệ thống quản lý hồ sơ y tế trên Blockchain ·
           Admin Portal
         </footer>

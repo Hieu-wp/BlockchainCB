@@ -32,7 +32,30 @@
     <!-- ========================================== -->
     <!-- CÁC THƯ VIỆN CHÍNH -->
     <!-- ========================================== -->
+    <dependencyManagement>
+        <dependencies><dependency>
+            <groupId>io.zonky.test.postgres</groupId>
+            <artifactId>embedded-postgres-binaries-bom</artifactId>
+            <version>18.3.0</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency></dependencies>
+    </dependencyManagement>
+
     <dependencies>
+
+        <!-- Database kiểm thử riêng, không dùng cấu hình Supabase. -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.zonky.test</groupId>
+            <artifactId>embedded-postgres</artifactId>
+            <version>2.2.2</version>
+            <scope>test</scope>
+        </dependency>
 
         <!-- Xây dựng REST API bằng Spring MVC -->
         <dependency>
@@ -114,4 +137,16 @@
         </plugins>
     </build>
 
+    <profiles>
+        <profile>
+            <id>postgres-it</id>
+            <build><plugins><plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <executions><execution><goals>
+                    <goal>integration-test</goal><goal>verify</goal>
+                </goals></execution></executions>
+            </plugin></plugins></build>
+        </profile>
+    </profiles>
 </project>

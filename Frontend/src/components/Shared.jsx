@@ -14,7 +14,7 @@ export function TrangThai({ giaTri }) {
 export function ThongBaoLoi({ loi, onRetry }) {
   return <div className="error-box" role="alert"><AlertCircle size={19}/><div><strong>Không tải được dữ liệu</strong><p>{loi?.message || 'Đã xảy ra lỗi.'}</p></div>{onRetry && <button className="btn btn-outline" onClick={onRetry}><RefreshCw size={15}/> Thử lại</button>}</div>
 }
-export function DangTai() { return <div className="loading" role="status"><span className="spinner"/>Đang tải dữ liệu từ Backend...</div> }
+export function DangTai({ noiDung = 'Đang tải dữ liệu...' }) { return <div className="loading" role="status"><span className="spinner"/>{noiDung}</div> }
 export function Rong({ noiDung = 'Chưa có dữ liệu phù hợp.' }) { return <div className="empty"><Search size={30}/><p>{noiDung}</p></div> }
 export function PhanTrang({ trang, tongTrang, setTrang, tongPhanTu }) {
   return <div className="pagination"><span> Tổng cộng <b>{tongPhanTu ?? 0}</b> bản ghi</span><div className="pagination-buttons"><button disabled={trang <= 0} onClick={() => setTrang(Math.max(0, trang - 1))} aria-label="Trang trước"><ChevronLeft size={17}/></button><span>Trang {trang + 1}/{Math.max(tongTrang || 0, 1)}</span><button disabled={trang + 1 >= (tongTrang || 0)} onClick={() => setTrang(trang + 1)} aria-label="Trang tiếp"><ChevronRight size={17}/></button></div></div>

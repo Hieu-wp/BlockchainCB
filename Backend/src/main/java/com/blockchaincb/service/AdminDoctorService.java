@@ -12,6 +12,10 @@ import com.blockchaincb.entity.Doctor;
 import com.blockchaincb.entity.User;
 import com.blockchaincb.repository.AdminDoctorRepository;
 import com.blockchaincb.repository.UserRepository;
+import com.blockchaincb.blockchain.DieuKienTichHopBacSi;
+import com.blockchaincb.blockchain.DieuKienTichHopBacSi.ThaoTac;
+import com.blockchaincb.service.AdminAuditLogService.HanhDongQuanTri;
+import com.blockchaincb.service.AdminAuditLogService.LoaiDoiTuong;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -40,7 +44,7 @@ import org.springframework.data.jpa.domain.Specification;
  * - Xem thông tin chi tiết.
  *
  * Chưa kích hoạt:
- * - Duyệt và từ chối bác sĩ.
+ * - Duyệt bác sĩ (từ chối PENDING đã được triển khai cùng audit).
  * - Khóa và mở khóa bác sĩ.
  *
  * Các thao tác thay đổi quyền phải được tích hợp
@@ -56,16 +60,22 @@ public class AdminDoctorService {
 
     private final AdminDoctorRepository khoQuanLyBacSi;
     private final UserRepository khoNguoiDung;
+    private final AdminAuditLogService dichVuNhatKy;
+    private final DieuKienTichHopBacSi dieuKienBlockchain;
 
     /**
      * Khởi tạo dịch vụ quản lý bác sĩ.
      */
     public AdminDoctorService(
             AdminDoctorRepository khoQuanLyBacSi,
-            UserRepository khoNguoiDung) {
+            UserRepository khoNguoiDung,
+            AdminAuditLogService dichVuNhatKy,
+            DieuKienTichHopBacSi dieuKienBlockchain) {
 
         this.khoQuanLyBacSi = khoQuanLyBacSi;
         this.khoNguoiDung = khoNguoiDung;
+        this.dichVuNhatKy = dichVuNhatKy;
+        this.dieuKienBlockchain = dieuKienBlockchain;
     }
 
     /**
@@ -307,31 +317,49 @@ public class AdminDoctorService {
      * Chưa cập nhật database khi chưa có cơ chế
      * xác nhận cấp DOCTOR_ROLE trên Blockchain.
      */
+    @Transactional(readOnly = true)
     public DoctorResponse duyetBacSi(
             Long maBacSi) {
 
         kiemTraMaBacSi(maBacSi);
-
-        throw chuaHoTro(
-                "Chưa tích hợp cấp DOCTOR_ROLE trên Blockchain"
-        );
+        dichVuNhatKy.layMaAdminDangNhap();
+        Doctor bacSi = layBacSiTonTai(maBacSi);
+        yeuCauTrangThai(bacSi, CHO_DUYET);
+        User taiKhoan = layTaiKhoanBacSi(bacSi, false);
+        if (!taiKhoan.isDangHoatDong() || bacSi.getMaChuyenKhoa() == null
+                || bacSi.getMaChuyenKhoa() <= 0 || trong(bacSi.getSoGiayPhep())
+                || trong(bacSi.getBenhVien()) || trong(bacSi.getHoTen()) || trong(bacSi.getEmail())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Hồ sơ hoặc tài khoản bác sĩ chưa đủ điều kiện phê duyệt");
+        }
+        // Chưa có hợp đồng xác nhận Blockchain: không thay đổi DB, không ghi audit thành công.
+        throw chuaHoTro(dieuKienBlockchain.lyDoChuaHoTro(ThaoTac.PHE_DUYET));
     }
 
     /**
      * Từ chối bác sĩ.
      *
-     * Cần lưu lý do và nhật ký trước khi kích hoạt.
+     * Chỉ PENDING -> REJECTED. Cập nhật JPA và audit JDBC dùng cùng DataSource/transaction.
      */
+    @Transactional
     public DoctorResponse tuChoiBacSi(
             Long maBacSi,
             String lyDo) {
 
         kiemTraMaBacSi(maBacSi);
         kiemTraLyDo(lyDo);
-
-        throw chuaHoTro(
-                "Chưa tích hợp nghiệp vụ từ chối và nhật ký quản trị"
-        );
+        dichVuNhatKy.layMaAdminDangNhap();
+        Doctor bacSi = khoQuanLyBacSi.layDeCapNhat(maBacSi)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy bác sĩ"));
+        yeuCauTrangThai(bacSi, CHO_DUYET);
+        // Giữ tài khoản liên kết ổn định trong lúc kiểm tra vai trò và ghi audit.
+        layTaiKhoanBacSi(bacSi, true);
+        if (khoQuanLyBacSi.tuChoiHoSoChoDuyet(maBacSi) != 1) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Hồ sơ không còn ở trạng thái chờ duyệt");
+        }
+        dichVuNhatKy.ghiNhatKy(HanhDongQuanTri.DOCTOR_REJECT, LoaiDoiTuong.DOCTOR, maBacSi,
+                "Từ chối hồ sơ bác sĩ #" + maBacSi + ". Lý do: " + lyDo.trim());
+        // approved_by/approved_at chỉ dành cho phê duyệt; thông tin từ chối ở audit.
+        return layChiTietBacSi(maBacSi);
     }
 
     /**
@@ -340,29 +368,66 @@ public class AdminDoctorService {
      * Chưa thực hiện vì trạng thái khóa và cơ chế
      * thu hồi quyền Blockchain chưa được thống nhất.
      */
+    @Transactional(readOnly = true)
     public DoctorResponse khoaBacSi(
             Long maBacSi,
             String lyDo) {
 
         kiemTraMaBacSi(maBacSi);
         kiemTraLyDo(lyDo);
-
-        throw chuaHoTro(
-                "Chưa tích hợp khóa tài khoản và thu hồi quyền Blockchain"
-        );
+        kiemTraBacSiDaDuyet(maBacSi);
+        throw chuaHoTro(dieuKienBlockchain.lyDoChuaHoTro(ThaoTac.DINH_CHI));
     }
 
     /**
      * Mở khóa tài khoản bác sĩ.
      */
+    @Transactional(readOnly = true)
     public DoctorResponse moKhoaBacSi(
             Long maBacSi) {
 
         kiemTraMaBacSi(maBacSi);
+        kiemTraBacSiDaDuyet(maBacSi);
+        throw chuaHoTro(dieuKienBlockchain.lyDoChuaHoTro(ThaoTac.KICH_HOAT_LAI));
+    }
 
-        throw chuaHoTro(
-                "Chưa tích hợp mở khóa và đồng bộ quyền Blockchain"
-        );
+    private Doctor layBacSiTonTai(Long maBacSi) {
+        return khoQuanLyBacSi.findById(maBacSi)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy bác sĩ"));
+    }
+
+    private User layTaiKhoanBacSi(Doctor bacSi, boolean khoaDong) {
+        if (bacSi.getMaNguoiDung() == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Hồ sơ không có tài khoản liên kết");
+        }
+        User taiKhoan = (khoaDong ? khoNguoiDung.layDeCapNhat(bacSi.getMaNguoiDung())
+                : khoNguoiDung.findById(bacSi.getMaNguoiDung()))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "Tài khoản bác sĩ liên kết không tồn tại"));
+        if (!"DOCTOR".equalsIgnoreCase(taiKhoan.getVaiTro())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Tài khoản liên kết không có vai trò DOCTOR");
+        }
+        return taiKhoan;
+    }
+
+    private void yeuCauTrangThai(Doctor bacSi, String trangThai) {
+        if (!trangThai.equalsIgnoreCase(bacSi.getTrangThaiPheDuyet())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Trạng thái hồ sơ không cho phép thao tác này");
+        }
+    }
+
+    private void kiemTraBacSiDaDuyet(Long maBacSi) {
+        dichVuNhatKy.layMaAdminDangNhap();
+        Doctor bacSi = layBacSiTonTai(maBacSi);
+        yeuCauTrangThai(bacSi, DA_DUYET);
+        layTaiKhoanBacSi(bacSi, false);
+        if (trong(bacSi.getTrangThaiTaiKhoan())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Hồ sơ không có trạng thái tài khoản hợp lệ");
+        }
+        // Không tự diễn giải ACTIVE/SUSPENDED khi chưa có quy ước doctors.status của nhóm.
+    }
+
+    private boolean trong(String giaTri) {
+        return giaTri == null || giaTri.isBlank();
     }
 
     /**
@@ -538,6 +603,9 @@ public class AdminDoctorService {
                     HttpStatus.BAD_REQUEST,
                     "Lý do không được để trống"
             );
+        }
+        if (lyDo.length() > 350) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Lý do không được vượt quá 350 ký tự");
         }
     }
 

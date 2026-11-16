@@ -10,7 +10,7 @@ export default function AdminProfile() {
     <TieuDe nhan="TÀI KHOẢN QUẢN TRỊ" tieuDe="Hồ sơ Admin" moTa="Thông tin phiên đăng nhập được cung cấp bởi hệ thống."><LamMoi onClick={taiLai}/></TieuDe>
     {dangTai ? <DangTai/> : loiPhien ? <ThongBaoLoi loi={loiPhien} onRetry={taiLai}/> : !duLieu ? <Rong noiDung="Chưa có thông tin phiên đăng nhập."/> : <>
       <section className="profile-summary" aria-label="Tóm tắt tài khoản Admin">
-        <span className="profile-symbol"><UserRound size={32}/></span><div><h2>{duLieu.tenDangNhap || 'Chưa có tên đăng nhập'}</h2><p>Tài khoản quản trị BlockchainCB</p></div>
+        <span className="profile-symbol"><UserRound size={32}/></span><div><h2>{duLieu.tenDangNhap || 'Chưa có tên đăng nhập'}</h2><p>Tài khoản quản trị MediCare</p></div>
         <span className="pill success"><ShieldCheck size={14}/> Phiên Admin hợp lệ</span>
       </section>
       <div className="two-col">

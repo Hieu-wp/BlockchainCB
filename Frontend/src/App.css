@@ -3,6 +3,10 @@
 @media(max-width:1200px){.stat-grid{grid-template-columns:repeat(2,1fr)}.filter-grid{grid-template-columns:repeat(2,1fr)}.filter-grid .btn{align-self:end}.main-content{padding:28px}.topbar{padding:0 28px}}@media(max-width:850px){.sidebar{position:fixed;left:0;transform:translateX(-100%);transition:transform .2s}.sidebar-open{transform:translateX(0)}.sidebar-overlay{display:block;position:fixed;inset:0;background:#092c4c88;z-index:15}.menu-toggle,.close-sidebar{display:grid;place-items:center;background:transparent;border:0;color:#325e83}.close-sidebar{margin-left:auto;color:#fff}.two-col{grid-template-columns:1fr}.connection-status{display:none}.login-bg{grid-template-columns:1fr}.login-deco{display:none}.login-card{padding:50px 24px}.login-brand{margin-bottom:45px}}@media(max-width:600px){.topbar{padding:0 18px;height:67px}.main-content{padding:21px 15px}.page-heading{align-items:flex-start}.page-heading h1{font-size:23px}.page-heading p{font-size:12px}.stat-grid{gap:10px}.stat-card{padding:15px;min-height:113px;display:block}.stat-icon{height:37px;width:37px;border-radius:10px;margin-bottom:10px}.stat-icon svg{width:19px}.stat-content>div{white-space:normal}.stat-content strong{font-size:23px}.stat-content small{display:none}.filter-grid,.doctors-filter{grid-template-columns:1fr}.admin-profile>div{display:none}.topbar-right{gap:0}.pagination{gap:12px;flex-wrap:wrap}.panel-head{padding:17px}.panel-body{padding:17px}.page-heading{gap:8px;flex-wrap:wrap}.app-footer{padding:18px}}
 
 /* Hộp thoại native giữ focus và hỗ trợ Escape cho bàn phím. */
+.doctor-reject{width:min(520px,calc(100vw - 32px))}
+.doctor-reject textarea{display:block;width:100%;min-height:110px;margin:10px 0;padding:12px;border:1px solid #c9dfef;border-radius:8px;resize:vertical;font:inherit;box-sizing:border-box}
+.doctor-reject .modal-actions{flex-wrap:wrap}
+.doctor-reject .login-error{line-height:1.7;overflow-wrap:anywhere}
 dialog.modal{border:0;max-height:85dvh;overflow:auto;color:inherit}
 dialog.modal::backdrop{background:#072c4b99}
 .detail-grid{display:grid;gap:14px;margin:20px 0}
@@ -11,6 +15,19 @@ dialog.modal::backdrop{background:#072c4b99}
 .row-actions{display:flex;flex-wrap:wrap;gap:8px}
 .pending-actions{margin-bottom:18px;flex-wrap:wrap}
 .login-label input{padding-right:48px}
+.logout-confirm{width:min(460px,calc(100vw - 32px))}
+.logout-confirm::backdrop{background:#072c4b66}
+.logout-confirm-icon{display:grid;place-items:center;width:48px;height:48px;margin-bottom:16px;border-radius:14px;background:#e9f2ff;color:#0d6efd}
+.logout-confirm .logout-error{line-height:1.7;overflow-wrap:anywhere;margin-top:16px}
+.logout-confirm .modal-actions{flex-wrap:wrap}
+/* Khối giới thiệu đăng nhập: chung trục trái, đủ chỗ cho tiêu đề desktop. */
+.login-deco{padding:clamp(24px,4vw,80px)}
+.login-deco-content{position:relative;z-index:1;width:100%;max-width:620px;margin-inline:auto;display:flex;flex-direction:column;align-items:flex-start}
+.login-deco-content>svg{margin-bottom:28px;color:#7ae8d0;flex-shrink:0}
+.login-deco h2{max-width:none;font-size:clamp(30px,2.65vw,40px);line-height:1.2;letter-spacing:-.9px;margin:0 0 20px}
+.login-deco p{max-width:42ch;font-size:16px;line-height:1.8;margin:0}
+.login-deco .deco-line{margin-top:32px;line-height:1.6}
+@media(min-width:851px){.login-deco h2{white-space:nowrap}}
 .admin-profile strong{max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .stat-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
 @media(max-width:1200px){.stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}

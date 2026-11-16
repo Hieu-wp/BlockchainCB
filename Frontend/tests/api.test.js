@@ -80,8 +80,13 @@ test('Hồi quy xác thực session và các yêu cầu quản trị', async kie
     await kiemThu.test('Đăng xuất gửi POST với CSRF mới', async () => {
       globalThis.fetch = async (url, tuyChon) => {
         if (url === '/login') return trangCsrf()
+        if (url === '/api/admin/me') {
+          assert.equal(tuyChon.cache, 'no-store')
+          return phanHoi(url, {}, 403)
+        }
         assert.equal(url, '/logout')
         assert.equal(tuyChon.method, 'POST')
+        assert.equal(tuyChon.redirect, 'manual')
         assert.equal(tuyChon.body.get('_csrf'), 'csrf-thu-nghiem')
         return phanHoi('/login?logout', '', 200, 'text/html')
       }

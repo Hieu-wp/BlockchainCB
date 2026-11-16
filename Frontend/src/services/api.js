@@ -114,12 +114,12 @@ export async function yeuCau(duongDan, tuyChon = {}) {
     })
   } catch {
     throw new Error(
-      'Không thể kết nối đến Backend Spring Boot.'
+      'Không thể kết nối đến Hệ thống.'
     )
   }
 
   if (phanHoi.status >= 500) {
-    throw loiHttp(phanHoi.status, `Backend chưa sẵn sàng hoặc gặp lỗi (HTTP ${phanHoi.status}). Kiểm tra Spring Boot tại localhost:8080.`)
+    throw loiHttp(phanHoi.status, `Máy chủ chưa sẵn sàng hoặc gặp lỗi (HTTP ${phanHoi.status}). Kiểm tra Spring Boot tại localhost:8080.`)
   }
   if (phanHoi.status === 401) {
     window.dispatchEvent(new Event('admin:het-phien'))
@@ -215,7 +215,7 @@ export async function dangNhap(email, matKhau) {
     })
   } catch {
     throw new Error(
-      'Không kết nối được Backend để đăng nhập.'
+      'Không kết nối được máy chủ để đăng nhập.'
     )
   }
 
@@ -265,28 +265,80 @@ export async function dangNhap(email, matKhau) {
 /**
  * Đăng xuất Admin qua Spring Security.
  */
-export async function dangXuat() {
+// Giữ một yêu cầu đang chạy cho mọi caller, không tự lặp lại POST khi lỗi.
+let yeuCauDangXuatHienTai = null
+
+export function dangXuat() {
+  if (!yeuCauDangXuatHienTai) {
+    yeuCauDangXuatHienTai = thucHienDangXuat().finally(() => {
+      yeuCauDangXuatHienTai = null
+    })
+  }
+  return yeuCauDangXuatHienTai
+}
+
+async function thucHienDangXuat() {
   const token = await layCsrfToken()
-
-  const phanHoi = await ketNoi('/logout', {
-    method: 'POST',
-    credentials: 'same-origin',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: new URLSearchParams({
-      _csrf: token,
-    }),
-  })
-
-  if (!phanHoi.ok || new URL(phanHoi.url, window.location.origin).searchParams.has('error')) {
-    throw loiHttp(
-      phanHoi.status,
-      'Không thể đăng xuất. Vui lòng thử lại.'
-    )
+  let phanHoi
+  try {
+    phanHoi = await ketNoi('/logout', {
+      method: 'POST',
+      credentials: 'same-origin',
+      // Không để lỗi tải trang login sau redirect che kết quả POST đã gửi.
+      redirect: 'manual',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ _csrf: token }),
+    })
+  } catch {
+    throw new Error('Không nhận được phản hồi đăng xuất do lỗi mạng hoặc hệ thống mất kết nối. Chưa xác nhận phiên đã được hủy. Vui lòng kiểm tra kết nối rồi thử lại.')
   }
 
-  return true
+  // Browser che redirect bằng opaqueredirect; đây chỉ là tín hiệu để kiểm tra phiên tiếp.
+  const laRedirect = phanHoi.type === 'opaqueredirect' || [301, 302, 303, 307, 308].includes(phanHoi.status)
+  // Với 401, kiểm tra thêm /me: phiên có thể đã hết trước thao tác này.
+  if (!laRedirect && !phanHoi.ok && phanHoi.status !== 401) {
+    if (phanHoi.status === 403) {
+      throw loiHttp(403, 'Đăng xuất bị từ chối: CSRF không hợp lệ hoặc phiên đã thay đổi. Bạn có thể thử lại để lấy CSRF mới; hệ thống chưa xác nhận đăng xuất.')
+    }
+    throw loiHttp(phanHoi.status, `Hệ thống không hoàn tất yêu cầu đăng xuất (HTTP ${phanHoi.status}). Vui lòng thử lại.`)
+  }
+
+  // Không dùng yeuCau(): nó phát sự kiện hết phiên, có thể đóng UI trước khi xác minh xong.
+  let kiemTra
+  try {
+    kiemTra = await ketNoi('/api/admin/me', {
+      method: 'GET', credentials: 'same-origin', cache: 'no-store', redirect: 'follow',
+      headers: { Accept: 'application/json' },
+    })
+  } catch {
+    throw new Error('Đã gửi yêu cầu đăng xuất nhưng không xác minh được phiên do lỗi mạng hoặc Hệ thống mất kết nối. Chưa thể xác nhận đăng xuất. Vui lòng thử lại.')
+  }
+
+  if ([401, 403].includes(kiemTra.status)) return true
+  if (!kiemTra.ok) {
+    throw loiHttp(kiemTra.status, `Đã gửi yêu cầu đăng xuất nhưng hệ thống chưa xác minh được phiên (HTTP ${kiemTra.status}). Vui lòng thử lại.`)
+  }
+
+  const diaChi = new URL(kiemTra.url, window.location.origin)
+  const kieuNoiDung = kiemTra.headers.get('content-type') || ''
+  if (diaChi.origin !== window.location.origin) {
+    throw new Error('Không xác minh được phiên qua cùng nguồn Frontend. Kiểm tra cấu hình redirect của Vite proxy.')
+  }
+  if (diaChi.pathname === '/login' && kieuNoiDung.includes('text/html')) {
+    const taiLieu = new DOMParser().parseFromString(await kiemTra.text(), 'text/html')
+    if (taiLieu.querySelector('input[name="_csrf"]')?.value) return true
+  }
+  if (kieuNoiDung.includes('application/json')) {
+    let phien
+    try { phien = await kiemTra.json() } catch {
+      throw new Error('Phản hồi kiểm tra phiên không hợp lệ. Chưa thể xác nhận đăng xuất; vui lòng thử lại.')
+    }
+    if (phien?.daXacThuc === false) return true
+    if (coQuyenAdmin(phien)) {
+      throw new Error('Phiên Admin vẫn còn hiệu lực. Chưa thể xác nhận đăng xuất; vui lòng thử lại.')
+    }
+  }
+  throw new Error('Phản hồi kiểm tra phiên không xác nhận được trạng thái đăng xuất. Vui lòng thử lại.')
 }
 
 /**
@@ -335,6 +387,11 @@ export const apiAdmin = {
 
   chiTietBacSi: ({ ma }) =>
     yeuCau(`/api/admin/doctors/${encodeURIComponent(ma)}`),
+
+  tuChoiBacSi: (ma, lyDo) =>
+    yeuCau(`/api/admin/doctors/${encodeURIComponent(ma)}/reject`, {
+      method: 'POST', data: { lyDo },
+    }),
 
   // Danh sách bác sĩ chờ phê duyệt
   bacSiChoDuyet: () =>

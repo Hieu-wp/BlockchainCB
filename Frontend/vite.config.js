@@ -8,9 +8,10 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     proxy: {
-      '/api': { target: 'http://localhost:8080', changeOrigin: true },
-      '/login': { target: 'http://localhost:8080', changeOrigin: true },
-      '/logout': { target: 'http://localhost:8080', changeOrigin: true },
+      // Spring có thể trả Location tuyệt đối về 8080; giữ redirect qua cùng nguồn Vite.
+      '/api': { target: 'http://localhost:8080', changeOrigin: true, autoRewrite: true },
+      '/login': { target: 'http://localhost:8080', changeOrigin: true, autoRewrite: true },
+      '/logout': { target: 'http://localhost:8080', changeOrigin: true, autoRewrite: true },
     },
   },
 })
