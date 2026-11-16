@@ -1,0 +1,37 @@
+import assert from 'node:assert/strict';
+const base=process.env.DOCTOR_SMOKE_URL || 'http://127.0.0.1:5173';
+assert.ok(['127.0.0.1','localhost'].includes(new URL(base).hostname),'Only loopback fixture allowed');
+const probe=await fetch(base+'/api/doctor/me');
+assert.equal(probe.headers.get('x-doctor-fixture'),'isolated-h2','Refusing writes: server is not marked isolated H2 fixture');
+const password=process.env.DOCTOR_DEMO_PASSWORD;assert.ok(password,'Set DOCTOR_DEMO_PASSWORD');
+let checks=0;
+async function call(path,{token,method='GET',body,status=200,blob=false}={}){
+ const headers=token?{Authorization:`Bearer ${token}`} : {};
+ if(body && !(body instanceof FormData))headers['Content-Type']='application/json';
+ const r=await fetch(base+'/api'+path,{method,headers,body:body instanceof FormData?body:body?JSON.stringify(body):undefined});
+ assert.equal(r.headers.get('x-doctor-fixture'),'isolated-h2');assert.equal(r.status,status,`${method} ${path}`);checks++;
+ return status>=400?null:blob?r.arrayBuffer():r.json();
+}
+const pending=await call('/auth/doctor/login',{method:'POST',body:{email:'pending@doctor.local',password}});
+await call('/doctor/me',{token:pending.token});await call('/doctor/patients',{token:pending.token,status:403});
+await call('/auth/doctor/login',{method:'POST',body:{email:'blocked@doctor.local',password},status:403});
+const rejected=await call('/auth/doctor/login',{method:'POST',body:{email:'rejected@doctor.local',password}});await call('/doctor/patients',{token:rejected.token,status:403});
+const {token}=await call('/auth/doctor/login',{method:'POST',body:{email:'approved@doctor.local',password}});
+const me=await call('/doctor/me',{token});await call('/doctor/me',{token,method:'PATCH',body:{fullName:me.fullName,hospital:me.hospital}});
+const patients=await call('/doctor/patients?q=&page=0&size=10',{token});assert.equal(patients.totalElements,2);
+const p=patients.content[0].id;await call(`/doctor/patients/${p}/records`,{token});
+const form=new FormData();form.append('file',new Blob(['%PDF-1.4 fixture'],{type:'application/pdf'}),'demo.pdf');
+const file=await call(`/doctor/patients/${p}/attachments`,{token,method:'POST',body:form,status:201});
+const content={patientId:p,examDate:'2026-01-01',diagnosis:'Frontend API smoke fixture',prescription:'',testResults:'',notes:'',attachmentIds:[file.id]};
+const record=await call('/doctor/records',{token,method:'POST',body:content,status:201});
+await call(`/doctor/records/${record.id}`,{token});
+await call(`/doctor/records/${record.id}/versions`,{token,method:'POST',body:{expectedVersion:1,content:{...content,notes:'Version 2'}},status:201});
+await call(`/doctor/records/${record.id}/versions`,{token,method:'POST',body:{expectedVersion:1,content},status:409});
+const versions=await call(`/doctor/records/${record.id}/versions`,{token});assert.equal(versions.totalElements,2);
+await call(`/doctor/records/${record.id}/versions/1`,{token});
+const hash=await call(`/doctor/records/${record.id}/versions/2/hash`,{token});assert.equal(hash.currentContentMatchesHash,true);assert.equal(hash.blockchainStatus,'NOT_SUBMITTED');
+const bytes=await call(`/doctor/records/${record.id}/versions/2/attachments/${file.id}`,{token,blob:true});assert.equal(Buffer.from(bytes).toString(),'%PDF-1.4 fixture');
+await call('/doctor/records?page=0&size=10',{token});await call('/doctor/patients/3/records',{token,status:403});
+await call('/doctor/records',{token,method:'POST',body:{...content,patientId:patients.content[1].id,attachmentIds:[]},status:403});
+const email=`smoke.${Date.now()}@doctor.local`;await call('/auth/doctor/register',{method:'POST',body:{fullName:'Local smoke',email,password,licenseNumber:'LOCAL-SMOKE',hospital:'Local Hospital',specialtyId:2}});
+console.log(`PASS ${checks} real HTTP checks through Vite proxy → Java → isolated H2. No production writes.`);
