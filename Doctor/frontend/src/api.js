@@ -13,7 +13,11 @@ export async function request(path, { method = 'GET', body, signal, blob = false
   if (!response.ok) {
     if (response.status === 401 && token) { setToken(null); window.dispatchEvent(new Event('doctor:expired')); }
     const messages = { 400: 'Dữ liệu không hợp lệ. Kiểm tra các trường và chuyên khoa.', 401: 'Phiên hết hạn hoặc email / mật khẩu không đúng. Vui lòng đăng nhập lại.', 403: 'Bạn không có quyền hiện hành cho thao tác này, hoặc tài khoản đã bị hạn chế.', 404: 'Không tìm thấy hồ sơ hoặc phiên bản.', 409: 'Dữ liệu trùng, đã thay đổi hoặc không còn toàn vẹn. Hãy tải lại trước khi lưu.', 413: 'Tệp vượt quá giới hạn 5 MiB.', 415: 'Định dạng gửi không được hỗ trợ.', 503: 'Dịch vụ lưu tệp hoặc nhật ký chưa sẵn sàng. Kiểm tra lịch sử trước khi thử gửi lại.' };
-    throw new ApiError(response.status, messages[response.status] || 'Máy chủ chưa xử lý được yêu cầu. Vui lòng thử lại sau.');
+    const error = new ApiError(response.status, messages[response.status] || 'Máy chủ chưa xử lý được yêu cầu. Vui lòng thử lại sau.');
+    if (path.includes('/anchor-') || path.includes('/wallet/') || path.includes('/blockchain/')) {
+      try { const body = await response.json(); const code = body?.message?.split(':')[0]; if (/^[A-Z_]{3,80}$/.test(code)) error.code = code; } catch { /* Keep safe generic HTTP message. */ }
+    }
+    throw error;
   }
   return blob ? response.blob() : response.json();
 }

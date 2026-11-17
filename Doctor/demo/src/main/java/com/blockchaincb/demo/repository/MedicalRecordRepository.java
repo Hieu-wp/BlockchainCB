@@ -8,6 +8,10 @@ import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 
 public interface MedicalRecordRepository extends JpaRepository<MedicalRecord, Long> {
+  @Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+  @Query("select r from MedicalRecord r where r.id=:id")
+  Optional<MedicalRecord> lockForAnchor(@Param("id") Long id);
+
   @Query("select r from MedicalRecord r where r.patientId=:patient order by r.id desc")
   Page<MedicalRecord> forPatient(@Param("patient") Long patient, Pageable page);
 

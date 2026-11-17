@@ -28,6 +28,9 @@ import org.springframework.test.web.servlet.*;
 @ActiveProfiles("test")
 @org.springframework.context.annotation.Import(DemoApplicationTests.IsolatedDatabase.class)
 class DemoApplicationTests {
+  @org.springframework.test.context.bean.override.mockito.MockitoBean
+  com.blockchaincb.demo.blockchain.AnchorGateway anchorGateway;
+
   @org.springframework.boot.test.context.TestConfiguration
   static class IsolatedDatabase {
     @org.springframework.context.annotation.Bean
@@ -53,6 +56,10 @@ class DemoApplicationTests {
     r.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
     r.add("doctor.storage.local-enabled", () -> true);
     r.add("doctor.storage.local-root", () -> "./target/test-private-storage");
+    r.add("doctor.blockchain.enabled", () -> true);
+    r.add("doctor.blockchain.deployment-reviewed", () -> true);
+    r.add("doctor.blockchain.rpc-url", () -> "http://127.0.0.1/mock-only");
+    r.add("doctor.blockchain.reconcile-delay-ms", () -> "86400000");
   }
 
   @Autowired MockMvc mvc;
@@ -64,9 +71,14 @@ class DemoApplicationTests {
 
   @BeforeEach
   void clean() {
+    org.mockito.Mockito.reset(anchorGateway);
     assertTrue(db.queryForObject("SELECT H2VERSION()", String.class) != null);
     for (String table :
         List.of(
+            "doctor_backend.anchor_attempts",
+            "doctor_backend.record_anchors",
+            "doctor_backend.wallet_challenges",
+            "doctor_backend.wallet_bindings",
             "doctor_backend.audit_logs",
             "doctor_backend.version_attachments",
             "doctor_backend.record_versions",
@@ -701,5 +713,184 @@ class DemoApplicationTests {
         .andExpect(status().isBadRequest());
     assertEquals(
         0, db.queryForObject("SELECT count(*) FROM doctor_backend.attachments", Integer.class));
+  }
+
+  record WalletFixture(String address, String challengeId, String signature) {}
+
+  WalletFixture linkFixture(Actor actor) throws Exception {
+    var keys = org.web3j.crypto.Keys.createEcKeyPair();
+    String address = "0x" + org.web3j.crypto.Keys.getAddress(keys);
+    var response =
+        mvc.perform(
+                post("/api/doctor/wallet/challenges")
+                    .header("Authorization", "Bearer " + actor.token())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"address\":\"" + address + "\"}"))
+            .andExpect(status().isOk())
+            .andReturn();
+    String id = JsonPath.read(response.getResponse().getContentAsString(), "$.challengeId");
+    String message = JsonPath.read(response.getResponse().getContentAsString(), "$.message");
+    var sig =
+        org.web3j.crypto.Sign.signPrefixedMessage(
+            message.getBytes(java.nio.charset.StandardCharsets.UTF_8), keys);
+    byte[] out = new byte[65];
+    System.arraycopy(sig.getR(), 0, out, 0, 32);
+    System.arraycopy(sig.getS(), 0, out, 32, 32);
+    out[64] = sig.getV()[0];
+    String signature = org.web3j.utils.Numeric.toHexString(out);
+    mvc.perform(
+            post("/api/doctor/wallet/verify")
+                .header("Authorization", "Bearer " + actor.token())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"challengeId\":\"" + id + "\",\"signature\":\"" + signature + "\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.walletAddress").value(address));
+    return new WalletFixture(address, id, signature);
+  }
+
+  @Test
+  void walletSignatureIsPersistedAndReplayRejectedOverHttp() throws Exception {
+    var actor = approved("wallet-http@example.test");
+    var wallet = linkFixture(actor);
+    mvc.perform(get("/api/doctor/me").header("Authorization", "Bearer " + actor.token()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.walletAddress").value(wallet.address()));
+    mvc.perform(
+            post("/api/doctor/wallet/verify")
+                .header("Authorization", "Bearer " + actor.token())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"challengeId\":\""
+                        + wallet.challengeId()
+                        + "\",\"signature\":\""
+                        + wallet.signature()
+                        + "\"}"))
+        .andExpect(status().isConflict());
+    assertEquals(
+        1, db.queryForObject("SELECT count(*) FROM doctor_backend.wallet_bindings", Integer.class));
+  }
+
+  @Test
+  void pendingDoctorCannotLinkWalletOrPrepareAnchor() throws Exception {
+    register("pending-chain@example.test");
+    String token = login("pending-chain@example.test");
+    mvc.perform(
+            post("/api/doctor/wallet/challenges")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"address\":\"0x" + "1".repeat(40) + "\"}"))
+        .andExpect(status().isForbidden());
+    mvc.perform(
+            post("/api/doctor/records/1/versions/1/anchor-payload")
+                .header("Authorization", "Bearer " + token))
+        .andExpect(status().isForbidden());
+    org.mockito.Mockito.verifyNoInteractions(anchorGateway);
+  }
+
+  @Test
+  void anchorHttpRoundTripPersistsReceiptAndOverlaysImmutableSnapshotStatus() throws Exception {
+    var actor = approved("anchor-http@example.test");
+    var wallet = linkFixture(actor);
+    long patient = patient("patient-anchor@example.test");
+    grant(actor.id(), patient, true, true);
+    long id = create(actor, patient);
+    long patientUser =
+        db.queryForObject(
+            "SELECT user_id FROM doctor_backend.patient_links WHERE id=?", Long.class, patient);
+    String patientWallet = "0x" + "2".repeat(40);
+    // Patient module boundary is populated only as an isolated H2 test fixture.
+    db.update("UPDATE public.users SET wallet_address=? WHERE id=?", patientWallet, patientUser);
+    db.update(
+        "INSERT INTO"
+            + " doctor_backend.wallet_bindings(user_id,address,chain_id,verified_at,proof_method)"
+            + " VALUES (?,?,11155111,CURRENT_TIMESTAMP,'PERSONAL_SIGN')",
+        patientUser,
+        patientWallet);
+    org.mockito.Mockito.when(anchorGateway.doctorRole(wallet.address())).thenReturn(true);
+    org.mockito.Mockito.when(anchorGateway.writePermission(patientWallet, wallet.address()))
+        .thenReturn(true);
+    org.mockito.Mockito.when(anchorGateway.state(org.mockito.ArgumentMatchers.anyString()))
+        .thenReturn(
+            new com.blockchaincb.demo.blockchain.AnchorGateway.State(
+                "0x" + "0".repeat(40), 0, com.blockchaincb.demo.blockchain.ChainSettings.ZERO));
+    org.mockito.Mockito.when(anchorGateway.head()).thenReturn(100L);
+    org.mockito.Mockito.when(
+            anchorGateway.scan(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyLong()))
+        .thenReturn(new com.blockchaincb.demo.blockchain.AnchorGateway.Scan(null, 100L));
+    String base = "/api/doctor/records/" + id + "/versions/1";
+    var payload =
+        mvc.perform(
+                post(base + "/anchor-payload").header("Authorization", "Bearer " + actor.token()))
+            .andExpect(status().isOk())
+            .andReturn();
+    String key = JsonPath.read(payload.getResponse().getContentAsString(), "$.recordKey");
+    assertTrue(key.matches("0x[0-9a-f]{64}"));
+    mvc.perform(post(base + "/anchor-payload").header("Authorization", "Bearer " + actor.token()))
+        .andExpect(status().isConflict());
+    assertEquals(
+        key,
+        db.queryForObject(
+            "SELECT record_key FROM doctor_backend.record_anchors WHERE record_id=?",
+            String.class,
+            id));
+    String tx = "0x" + "5".repeat(64);
+    org.mockito.Mockito.when(
+            anchorGateway.verify(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(tx)))
+        .thenReturn(
+            new com.blockchaincb.demo.blockchain.AnchorGateway.Verified(
+                "CONFIRMED", "VERIFIED", 100L, "0x" + "6".repeat(64)));
+    for (int i = 0; i < 2; i++)
+      mvc.perform(
+              post(base + "/anchor-transactions")
+                  .header("Authorization", "Bearer " + actor.token())
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content("{\"transactionHash\":\"" + tx + "\"}"))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.status").value("CONFIRMED"));
+    assertEquals(
+        1,
+        db.queryForObject(
+            "SELECT count(*) FROM doctor_backend.anchor_attempts WHERE record_id=?",
+            Integer.class,
+            id));
+    mvc.perform(get("/api/doctor/records/" + id).header("Authorization", "Bearer " + actor.token()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.version.blockchainStatus").value("CONFIRMED"));
+    assertEquals(
+        "NOT_SUBMITTED",
+        db.queryForObject(
+            "SELECT blockchain_status FROM doctor_backend.record_versions WHERE record_id=?",
+            String.class,
+            id));
+    String canonical =
+        db.queryForObject(
+            "SELECT canonical_content FROM doctor_backend.record_versions WHERE record_id=?",
+            String.class,
+            id);
+    String rewritten = canonical.replace("7:Initial", "7:Changed");
+    assertNotEquals(canonical, rewritten);
+    db.update(
+        "UPDATE doctor_backend.record_versions SET"
+            + " diagnosis='Changed',canonical_content=?,content_hash=? WHERE record_id=?",
+        rewritten,
+        hash.sha256(rewritten),
+        id);
+    mvc.perform(get(base + "/hash").header("Authorization", "Bearer " + actor.token()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.storedSnapshotMatchesHash").value(true))
+        .andExpect(jsonPath("$.currentContentMatchesHash").value(false));
+    mvc.perform(get(base + "/anchor-status").header("Authorization", "Bearer " + actor.token()))
+        .andExpect(status().isConflict());
+    assertTrue(
+        db.queryForList("SELECT resource FROM doctor_backend.audit_logs", String.class).stream()
+            .noneMatch(
+                resource -> resource.contains(wallet.signature()) || resource.contains("Initial")));
+    db.update(
+        "UPDATE doctor_backend.access_grants SET revoked_at=CURRENT_TIMESTAMP WHERE patient_id=?",
+        patient);
+    mvc.perform(get(base + "/anchor-status").header("Authorization", "Bearer " + actor.token()))
+        .andExpect(status().isForbidden());
   }
 }

@@ -1,0 +1,34 @@
+import { beforeEach, afterEach, expect, it, vi } from 'vitest';
+const m = vi.hoisted(() => ({ wallet: { getChainId: vi.fn(), requestAddresses: vi.fn(), getAddresses: vi.fn(), signMessage: vi.fn(), writeContract: vi.fn() }, public: { readContract: vi.fn(), simulateContract: vi.fn() }, role: true, permission: true, latest: 0n }));
+vi.mock('viem', () => ({ createWalletClient: () => m.wallet, createPublicClient: () => m.public, custom: v => v }));
+vi.mock('./anchorApi', () => ({ anchorApi: { prepare: vi.fn(), submit: vi.fn(), config: vi.fn(), challenge: vi.fn(), verify: vi.fn() } }));
+import { anchorApi } from './anchorApi';
+import { anchorVersion, connectDoctorWallet, linkDoctorWallet, watchWallet, CONTRACT_ADDRESS } from './medicalRecordContract';
+const doctor = '0x' + '1'.repeat(40), patient = '0x' + '2'.repeat(40), hash = '0x' + '3'.repeat(64), zero = '0x' + '0'.repeat(64);
+beforeEach(() => {
+  vi.clearAllMocks(); m.role = true; m.permission = true; m.latest = 0n;
+  vi.stubGlobal('ethereum', { on: vi.fn(), removeListener: vi.fn() });
+  m.wallet.getChainId.mockResolvedValue(11155111); m.wallet.requestAddresses.mockResolvedValue([doctor]); m.wallet.getAddresses.mockResolvedValue([doctor]); m.wallet.signMessage.mockResolvedValue('0xsigned'); m.wallet.writeContract.mockResolvedValue(hash);
+  m.public.readContract.mockImplementation(async ({ functionName }) => ({ DOCTOR_ROLE: hash, hasRole: m.role, writePermission: m.permission, records: [patient, m.latest, hash] })[functionName]);
+  m.public.simulateContract.mockResolvedValue({ request: { functionName: 'anchorVersion', account: doctor } });
+  anchorApi.prepare.mockResolvedValue({ recordKey: hash, patientWallet: patient, versionNumber: 1, contentHash: hash, previousHash: zero, doctorWallet: doctor, chainId: 11155111, contractAddress: CONTRACT_ADDRESS });
+  anchorApi.submit.mockResolvedValue({ status: 'PENDING', transactionHash: hash });
+});
+afterEach(() => vi.unstubAllGlobals());
+const run = options => anchorVersion({ id: 1, number: 1, linkedWallet: doctor, ...options });
+it('connects a wallet and reads role without treating it as ownership proof', async () => { expect((await connectDoctorWallet()).hasDoctorRole).toBe(true); expect(anchorApi.verify).not.toHaveBeenCalled(); });
+it('simulates then broadcasts and sends hash to Java, still pending', async () => { const onHash = vi.fn(); expect((await run({ onHash })).status).toBe('PENDING'); expect(m.public.simulateContract).toHaveBeenCalledOnce(); expect(m.wallet.writeContract).toHaveBeenCalledOnce(); expect(onHash).toHaveBeenCalledWith(hash); expect(anchorApi.submit).toHaveBeenCalledWith(1, 1, hash); });
+it('requires MetaMask', async () => { vi.stubGlobal('ethereum', undefined); await expect(run()).rejects.toThrow('MetaMask'); });
+it('rejects wrong chain before preparation', async () => { m.wallet.getChainId.mockResolvedValue(1); await expect(run()).rejects.toThrow('Sai mạng'); expect(anchorApi.prepare).not.toHaveBeenCalled(); });
+it('rejects an account different from backend linked wallet', async () => { m.wallet.requestAddresses.mockResolvedValue([patient]); await expect(run()).rejects.toThrow('Sai ví Doctor'); expect(m.wallet.writeContract).not.toHaveBeenCalled(); });
+it('rejects missing role', async () => { m.role = false; await expect(run()).rejects.toThrow('DOCTOR_ROLE'); expect(m.wallet.writeContract).not.toHaveBeenCalled(); });
+it('rejects absent patient consent', async () => { m.permission = false; await expect(run()).rejects.toThrow('grantWrite'); });
+it('rejects an already anchored version', async () => { m.latest = 1n; await expect(run()).rejects.toThrow('thứ tự'); });
+it('never broadcasts when simulation fails', async () => { m.public.simulateContract.mockRejectedValueOnce(new Error('Contract revert')); await expect(run()).rejects.toThrow('Contract revert'); expect(m.wallet.writeContract).not.toHaveBeenCalled(); });
+it('does not submit a hash when user rejects MetaMask', async () => { m.wallet.writeContract.mockRejectedValueOnce(Object.assign(new Error('Rejected'), { code: 4001 })); await expect(run()).rejects.toMatchObject({ code: 4001 }); expect(anchorApi.submit).not.toHaveBeenCalled(); });
+it('stops before broadcast when account or chain changed', async () => { await expect(run({ stillCurrent: () => false })).rejects.toThrow('thay đổi'); expect(m.wallet.writeContract).not.toHaveBeenCalled(); });
+it('signs exact backend challenge and submits signature for ownership verification', async () => {
+  anchorApi.config.mockResolvedValue({ domain: window.location.host }); anchorApi.challenge.mockResolvedValue({ challengeId: 'nonce-id', message: 'server challenge' }); anchorApi.verify.mockResolvedValue({ walletAddress: doctor });
+  expect((await linkDoctorWallet(doctor)).walletAddress).toBe(doctor); expect(m.wallet.signMessage).toHaveBeenCalledWith({ account: doctor, message: 'server challenge' }); expect(anchorApi.verify).toHaveBeenCalledWith('nonce-id', '0xsigned');
+});
+it('cleans up account and chain change listeners', () => { const cb = vi.fn(); const stop = watchWallet(cb); expect(window.ethereum.on).toHaveBeenCalledWith('accountsChanged', cb); stop(); expect(window.ethereum.removeListener).toHaveBeenCalledWith('chainChanged', cb); });

@@ -22,6 +22,7 @@ public class MedicalRecordService {
   private final PatientAccessPolicy access;
   private final AttachmentService attachments;
   private final HashService hash;
+  private final com.blockchaincb.demo.blockchain.AnchorAttemptRepository anchorAttempts;
 
   public MedicalRecordService(
       MedicalRecordRepository records,
@@ -29,13 +30,15 @@ public class MedicalRecordService {
       DoctorIdentityService identities,
       PatientAccessPolicy access,
       AttachmentService attachments,
-      HashService hash) {
+      HashService hash,
+      com.blockchaincb.demo.blockchain.AnchorAttemptRepository anchorAttempts) {
     this.records = records;
     this.versions = versions;
     this.identities = identities;
     this.access = access;
     this.attachments = attachments;
     this.hash = hash;
+    this.anchorAttempts = anchorAttempts;
   }
 
   private Instant now() {
@@ -208,9 +211,9 @@ public class MedicalRecordService {
         v.getCanonicalSchema(),
         v.getContentHash(),
         v.getPreviousHash(),
-        v.getBlockchainStatus(),
+        anchorState(v).status(),
         hash.sha256(v.getCanonicalContent()).equals(v.getContentHash()),
-        hash.sha256(canonical(r, v)).equals(v.getContentHash()),
+        hash.sha256(canonical(r, v)).equals(v.getContentHash()) && matchesAnchorIntent(v),
         link);
   }
 
@@ -235,6 +238,7 @@ public class MedicalRecordService {
   }
 
   private VersionResponse response(RecordVersion v) {
+    var anchor = anchorState(v);
     return new VersionResponse(
         v.getId(),
         v.getVersionNumber(),
@@ -250,8 +254,36 @@ public class MedicalRecordService {
         List.copyOf(v.getAttachmentIds()),
         v.getContentHash(),
         v.getCanonicalSchema(),
-        v.getBlockchainStatus(),
-        v.getBlockchainTransactionHash(),
-        v.getBlockchainRecordId());
+        anchor.status(),
+        anchor.transactionHash(),
+        anchor.recordKey());
+  }
+
+  private record AnchorState(String status, String transactionHash, String recordKey) {}
+
+  private AnchorState anchorState(RecordVersion v) {
+    return anchorAttempts
+        .findFirstByRecordIdAndVersionNumberOrderByCreatedAtDesc(
+            v.getRecordId(), v.getVersionNumber())
+        .map(
+            a ->
+                new AnchorState(
+                    a.contentHash.equals("0x" + v.getContentHash()) ? a.status : "FAILED",
+                    a.transactionHash,
+                    a.recordKey))
+        .orElseGet(
+            () ->
+                new AnchorState(
+                    v.getBlockchainStatus(),
+                    v.getBlockchainTransactionHash(),
+                    v.getBlockchainRecordId()));
+  }
+
+  private boolean matchesAnchorIntent(RecordVersion v) {
+    return anchorAttempts
+        .findFirstByRecordIdAndVersionNumberOrderByCreatedAtDesc(
+            v.getRecordId(), v.getVersionNumber())
+        .map(a -> a.contentHash.equals("0x" + v.getContentHash()))
+        .orElse(true);
   }
 }
