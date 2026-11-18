@@ -10,11 +10,14 @@ public class PageController {
     public String home() { return "redirect:/login"; }
 
     @GetMapping({"/login", "/login.html"})
-    public String login() { return "login"; }      // templates/login.html[cite: 7]
+    public String login() { return "login"; }                  // templates/login.html
 
     @GetMapping({"/records", "/records.html"})
-    public String records() { return "records"; }  // templates/records.html[cite: 7]
+    public String records() { return "records"; }              // templates/records.html
 
     @GetMapping({"/record-detail", "/record-detail.html"})
-    public String recordDetail() { return "record-detail"; }  // templates/record-detail.html
+    public String recordDetail() { return "record-detail"; }   // templates/record-detail.html
+
+    @GetMapping({"/access-grants", "/access-grants.html"})
+    public String accessGrants() { return "access-grants"; }   // templates/access-grants.html
 }
