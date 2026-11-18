@@ -1,153 +1,296 @@
 :root {
-      --medical-primary: #0d6efd;
-      --medical-secondary: #20c997;
-      --medical-light: #e8f4fd;
-      --medical-dark: #0a4d8c;
-      --medical-bg: #f0f7fb;
-      --medical-card: #ffffff;
-      --medical-accent: #0dcaf0;
-    }
+  --med-dark: #065f46;
+  --med-primary: #059669;
+  --med-accent: #10b981;
+  --med-mint: #d1fae5;
+  --med-bg: #f3faf7;
+  --med-surface: #ffffff;
+  --med-border: #d1e7dd;
+  --med-text: #1e293b;
+  --med-muted: #64748b;
+}
 
-    body {
-      background-color: var(--medical-bg);
-      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-      color: #2c3e50;
-    }
+body {
+  background-color: var(--med-bg);
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  color: var(--med-text);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
 
-    .navbar-medical {
-      background: linear-gradient(135deg, var(--medical-dark), var(--medical-primary));
-      box-shadow: 0 2px 12px rgba(13, 110, 253, 0.25);
-    }
+/* Navbar xanh lá y tế tươi sáng, rõ nét */
+.navbar-medical {
+  background: linear-gradient(90deg, var(--med-dark) 0%, var(--med-primary) 100%);
+  box-shadow: 0 4px 18px rgba(5, 150, 105, 0.25);
+  border-bottom: 2px solid rgba(167, 243, 208, 0.5);
+  padding: 0.7rem 0;
+}
 
-    .profile-header {
-      background: linear-gradient(135deg, #ffffff 0%, var(--medical-light) 100%);
-      border-radius: 16px;
-      border: 1px solid rgba(13, 110, 253, 0.12);
-      box-shadow: 0 4px 20px rgba(13, 110, 253, 0.08);
-    }
+.navbar-brand {
+  font-weight: 700;
+  font-size: 1.25rem;
+  letter-spacing: 0.2px;
+  color: #ffffff !important;
+}
 
-    .avatar-circle {
-      width: 100px;
-      height: 100px;
-      background: linear-gradient(135deg, var(--medical-primary), var(--medical-secondary));
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-size: 2.5rem;
-      box-shadow: 0 6px 16px rgba(13, 110, 253, 0.3);
-      border: 4px solid white;
-    }
+.brand-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #34d399, #059669);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 1.1rem;
+  box-shadow: 0 2px 8px rgba(6, 95, 70, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+}
 
-    .badge-medical {
-      background: var(--medical-light);
-      color: var(--medical-dark);
-      font-weight: 500;
-      padding: 0.4em 0.8em;
-    }
+.navbar-medical .nav-link {
+  color: rgba(255, 255, 255, 0.9) !important;
+  font-weight: 500;
+  font-size: 0.94rem;
+  padding: 0.5rem 0.95rem !important;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
 
-    .filter-card {
-      background: var(--medical-card);
-      border-radius: 14px;
-      border: none;
-      box-shadow: 0 3px 15px rgba(0, 0, 0, 0.06);
-    }
+.navbar-medical .nav-link:hover {
+  color: #ffffff !important;
+  background-color: rgba(255, 255, 255, 0.16);
+}
 
-    .filter-card .form-label {
-      font-weight: 600;
-      font-size: 0.85rem;
-      color: var(--medical-dark);
-      margin-bottom: 0.35rem;
-    }
+.navbar-medical .nav-link.active {
+  color: var(--med-dark) !important;
+  font-weight: 700;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(6, 95, 70, 0.2);
+}
 
-    .btn-medical {
-      background: linear-gradient(135deg, var(--medical-primary), #0b5ed7);
-      border: none;
-      color: white;
-      font-weight: 500;
-      border-radius: 8px;
-    }
+@media (min-width: 992px) {
+  .border-lg-start {
+    border-left: 1px solid rgba(255, 255, 255, 0.28);
+  }
+}
 
-    .btn-medical:hover {
-      background: linear-gradient(135deg, #0b5ed7, var(--medical-dark));
-      color: white;
-    }
+.btn-logout {
+  background-color: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 8px;
+  font-weight: 500;
+  padding: 0.35rem 0.75rem;
+  transition: all 0.2s ease;
+}
 
-    .btn-outline-medical {
-      border: 1.5px solid var(--medical-primary);
-      color: var(--medical-primary);
-      font-weight: 500;
-      border-radius: 8px;
-    }
+.btn-logout:hover {
+  background-color: #ef4444;
+  border-color: #ef4444;
+  color: #ffffff;
+}
 
-    .btn-outline-medical:hover {
-      background: var(--medical-primary);
-      color: white;
-    }
+/* Profile Header */
+.profile-header {
+  background: linear-gradient(135deg, #ffffff 0%, #ecfdf5 100%);
+  border-radius: 16px;
+  border: 1px solid var(--med-border);
+  border-left: 5px solid var(--med-primary);
+  box-shadow: 0 4px 20px rgba(5, 150, 105, 0.07);
+}
 
-    .table-medical thead {
-      background: linear-gradient(135deg, var(--medical-dark), var(--medical-primary));
-      color: #ffffff;
-    }
+.profile-header .text-primary {
+  color: var(--med-primary) !important;
+}
 
-    .table-medical th {
-      font-weight: 600;
-      border-bottom: none;
-      white-space: nowrap;
-      padding-top: 0.9rem;
-      padding-bottom: 0.9rem;
-    }
+.avatar-circle {
+  width: 88px;
+  height: 88px;
+  background: linear-gradient(135deg, var(--med-primary), #34d399);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 2.3rem;
+  box-shadow: 0 8px 18px rgba(5, 150, 105, 0.25);
+  border: 3px solid #ffffff;
+}
 
-    .table-medical tbody tr {
-      transition: background-color 0.15s ease;
-      cursor: pointer;
-    }
+.badge-medical {
+  background-color: var(--med-mint);
+  color: var(--med-dark);
+  font-weight: 600;
+  font-size: 0.8rem;
+  padding: 0.45em 0.85em;
+  border-radius: 6px;
+}
 
-    .table-medical tbody tr:hover {
-      background-color: var(--medical-light);
-    }
+.badge-follow {
+  background-color: #dcfce7;
+  color: #15803d;
+  font-weight: 600;
+  font-size: 0.8rem;
+  padding: 0.45em 0.85em;
+  border-radius: 6px;
+}
 
-    .badge-specialty {
-      font-weight: 500;
-      padding: 0.35em 0.75em;
-    }
+/* Hộp ví Blockchain */
+.wallet-box {
+  background-color: #ffffff;
+  border: 1px solid var(--med-border);
+  box-shadow: 0 2px 10px rgba(5, 150, 105, 0.05);
+  min-width: 230px;
+}
 
-    .status-done {
-      background-color: #d1e7dd;
-      color: #0f5132;
-    }
+.wallet-box .text-primary {
+  color: var(--med-primary) !important;
+}
 
-    .status-pending {
-      background-color: #fff3cd;
-      color: #664d03;
-    }
+.btn-wallet {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  border: none;
+  color: #ffffff;
+  border-radius: 8px;
+  padding: 0.42rem 0.9rem;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
 
-    .status-cancelled {
-      background-color: #f8d7da;
-      color: #842029;
-    }
+.btn-wallet:hover {
+  background: linear-gradient(135deg, #d97706, #b45309);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(217, 119, 6, 0.3);
+}
 
-    .pagination .page-link {
-      color: var(--medical-primary);
-      border-radius: 8px;
-      margin: 0 3px;
-      border: 1px solid #dee2e6;
-    }
+/* Bộ lọc & Bảng */
+.filter-card,
+.table-card {
+  background: var(--med-surface);
+  border-radius: 14px;
+  border: 1px solid var(--med-border);
+  box-shadow: 0 2px 12px rgba(5, 150, 105, 0.05);
+  overflow: hidden;
+}
 
-    .pagination .page-item.active .page-link {
-      background: var(--medical-primary);
-      border-color: var(--medical-primary);
-      color: white;
-    }
+.filter-card .form-label {
+  font-weight: 600;
+  font-size: 0.84rem;
+  color: var(--med-dark);
+  margin-bottom: 0.4rem;
+}
 
-    .pagination .page-link:hover {
-      background: var(--medical-light);
-      color: var(--medical-dark);
-    }
+.filter-card .form-control,
+.filter-card .form-select {
+  border-color: #cbd5e1;
+  border-radius: 8px;
+  font-size: 0.92rem;
+}
 
-    footer {
-      background: var(--medical-dark);
-      color: rgba(255, 255, 255, 0.85);
-      font-size: 0.9rem;
-    }
+.filter-card .form-control:focus,
+.filter-card .form-select:focus {
+  border-color: var(--med-accent);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.18);
+}
+
+.btn-medical {
+  background: linear-gradient(135deg, var(--med-primary), var(--med-dark));
+  border: none;
+  color: #ffffff;
+  font-weight: 500;
+  border-radius: 0 8px 8px 0;
+}
+
+.btn-medical:hover {
+  background: var(--med-dark);
+  color: #ffffff;
+}
+
+.btn-outline-medical {
+  border: 1.5px solid var(--med-primary);
+  color: var(--med-primary);
+  font-weight: 600;
+  border-radius: 8px;
+}
+
+.btn-outline-medical:hover {
+  background: var(--med-primary);
+  color: #ffffff;
+}
+
+.table-medical thead {
+  background: linear-gradient(90deg, var(--med-dark), var(--med-primary));
+  color: #ffffff;
+}
+
+.table-medical th {
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  border-bottom: none;
+  white-space: nowrap;
+  padding: 0.95rem 0.75rem;
+}
+
+.table-medical td {
+  padding: 0.9rem 0.75rem;
+  border-color: #ecfdf5;
+}
+
+.table-medical tbody tr {
+  transition: background-color 0.15s ease;
+  cursor: pointer;
+}
+
+.table-medical tbody tr:hover {
+  background-color: #ecfdf5;
+}
+
+.badge-specialty {
+  font-weight: 600;
+  padding: 0.4em 0.8em;
+  border-radius: 6px;
+}
+
+.status-done {
+  background-color: #dcfce7;
+  color: #166534;
+}
+
+.status-pending {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+.status-cancelled {
+  background-color: #fee2e2;
+  color: #991b1b;
+}
+
+/* Phân trang */
+.pagination .page-link {
+  color: var(--med-primary);
+  border-radius: 8px;
+  margin: 0 3px;
+  border: 1px solid var(--med-border);
+  font-weight: 500;
+}
+
+.pagination .page-item.active .page-link {
+  background: var(--med-primary);
+  border-color: var(--med-primary);
+  color: #ffffff;
+}
+
+.pagination .page-link:hover {
+  background: var(--med-mint);
+  color: var(--med-dark);
+}
+
+footer {
+  margin-top: auto;
+  background: var(--med-dark);
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 0.88rem;
+}

@@ -19,5 +19,8 @@ public class PageController {
     public String recordDetail() { return "record-detail"; }   // templates/record-detail.html
 
     @GetMapping({"/access-grants", "/access-grants.html"})
-    public String accessGrants() { return "access-grants"; }   // templates/access-grants.html
+    public String accessGrants() { return "access-grants"; }// templates/access-grants.html
+
+    @GetMapping({"/access-logs", "/access-logs.html"})
+    public String accessLogs() { return "access-logs"; }
 }

@@ -22,6 +22,6 @@ public interface AccessGrantRepository extends JpaRepository<AccessGrant, Long> 
         ORDER BY g.createdAt DESC
     """)
     List<AccessGrant> findPendingAndActiveByPatientId(@Param("patientId") Long patientId);
-
+    List<AccessGrant> findByPatientIdOrderByCreatedAtDesc(Long patientId);
     Optional<AccessGrant> findByIdAndPatientId(Long id, Long patientId);
 }

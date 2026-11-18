@@ -46,7 +46,7 @@ public class SecurityConfig {
                         new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))  // chua dang nhap -> 401
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers("/", "/login", "/records", "/login.html", "/records.html", "/record-detail", "/record-detail.html", "/access-grants", "/access-grants.html", "/js/**", "/css/**", "/favicon.ico", "/error").permitAll()
+                        .requestMatchers("/", "/login", "/records", "/login.html", "/records.html", "/record-detail", "/record-detail.html", "/access-grants", "/access-grants.html", "/access-logs.html","/access-logs", "/js/**", "/css/**", "/favicon.ico", "/error").permitAll()
 
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/specialties").authenticated()
