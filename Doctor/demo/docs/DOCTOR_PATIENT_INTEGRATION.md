@@ -1,5 +1,11 @@
 # Doctor ↔ Patient — bàn giao từng giai đoạn, 18/11/2026
 
+> Cập nhật luồng ghi 19/11/2026: [Tạo hồ sơ và kê đơn](../../../docs/LUONG_TAO_HO_SO_VA_KE_DON.md).
+> Đã có source/test writer public; cần duyệt SQL metadata phụ trước khi dùng Supabase. Các mục dưới là mốc trước đó.
+
+> Phối hợp cả ba module: xem [Hợp đồng database chung Admin / Doctor / Patient](../../../docs/SHARED_DATABASE_CONTRACT.md).
+> Tài liệu chung ghi rõ bảng chuẩn, ý nghĩa từng ID, phần Doctor đã làm và phần Patient/Admin chưa xác nhận.
+
 ## 1. Kết quả và ranh giới hiện tại
 
 | Giai đoạn | Kết quả |

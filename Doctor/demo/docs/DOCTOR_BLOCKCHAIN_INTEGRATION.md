@@ -1,5 +1,11 @@
 # Doctor Blockchain integration — bàn giao 17/11/2026
 
+> Cập nhật bệnh án chung 19/11/2026: [luồng Sepolia ngay sau lưu](SHARED_SEPOLIA_AFTER_SAVE.md).
+> Có API riêng cho public.record_versions và migration đề xuất; chưa áp dụng Supabase hoặc gửi giao dịch thật.
+
+> Cập nhật 19/11/2026: [sửa origin challenge và DB timeout](WALLET_DOMAIN_AND_DB_TIMEOUT.md).
+> Wallet challenge API V2 nhận thêm origin; Frontend và Backend cần cập nhật cùng phiên bản.
+
 > C?p nh?t Doctor?Patient 18/11/2026: xem [DOCTOR_PATIENT_INTEGRATION.md](DOCTOR_PATIENT_INTEGRATION.md) v? feature flag ngu?n quy?n public, API xin quy?n v? gi?i h?n b?nh ?n chung. C?c k?t qu? test b?n d??i c? th? l? k?t qu? l?ch s? c?a phi?n tr??c.
 
 ## 1. Phạm vi và kết luận
@@ -73,10 +79,10 @@ Frontend:
 1. JWT xác định User/Doctor; Doctor enabled và có approval PENDING hoặc APPROVED được liên kết ví.
    REJECTED/BLOCKED, sai role, trạng thái không hợp lệ hoặc disabled bị từ chối. Chứng minh sở hữu ví
    không yêu cầu DOCTOR_ROLE và không thay thế phê duyệt hành nghề.
-2. POST challenge với address. Backend lock User, kiểm tra ví trùng, tạo nonce ngẫu nhiên32 byte và TTL5 phút.
-3. Message chứa domain cố định từ cấu hình, URI, chain ID, User/Doctor identity, mục đích LINK_DOCTOR_WALLET_ONLY,
+2. POST challenge với address và origin. Backend kiểm origin theo allowlist, lock User, kiểm tra ví trùng, tạo nonce ngẫu nhiên32 byte và TTL5 phút.
+3. Message chứa domain/URI của origin đã được cho phép, chain ID, User/Doctor identity, mục đích LINK_DOCTOR_WALLET_ONLY,
    địa chỉ, nonce, challenge ID và expiry. Không lấy domain từ header client tùy ý.
-4. React kiểm host hiện tại bằng domain backend, chain11155111 và MetaMask account, ký đúng message bằng signMessage.
+4. React kiểm origin hiện tại thuộc walletOrigins và khớp Domain/URI trong challenge, chain11155111 và MetaMask account, ký đúng message bằng signMessage.
 5. POST signature/challenge ID. Backend lock User và challenge thuộc User đó, kiểm expiry/consumed, recover EIP-191.
 6. Signer phải bằng address trong challenge. Registry có UNIQUE address; kiểm public.users để chặn ví legacy thuộc người khác.
 7. Consume nonce, lưu proof registry và cập nhật users.wallet_address của chính Doctor trong cùng transaction.
@@ -190,7 +196,7 @@ Tất cả dùng JWT và Security hiện có; không nới permitAll.
 |---|---|---|
 | GET | /api/doctor/blockchain/config | enabled, chainId, contractAddress, domain, walletLinkPolicy (không có RPC URL) |
 | GET | /api/doctor/wallet | Ví của Doctor đăng nhập: walletAddress,verified,chainId,verifiedAt; trường users.wallet_address riêng lẻ không đủ để verified=true |
-| POST | /api/doctor/wallet/challenges | {address} → challengeId,message,expiresAt |
+| POST | /api/doctor/wallet/challenges | {address,origin} → challengeId,message,expiresAt,origin |
 | POST | /api/doctor/wallet/verify | {challengeId,signature} → walletAddress,chainId,verifiedAt |
 | POST | /api/doctor/records/{id}/versions/{number}/anchor-payload | Không body → recordKey,patientWallet,versionNumber,contentHash,previousHash,contractAddress,chainId,doctorWallet,attemptId |
 | POST | /api/doctor/records/{id}/versions/{number}/anchor-transactions | {transactionHash} → status,code,txHash/block metadata |
@@ -228,7 +234,8 @@ Không cung cấp DROP TABLE tự động; proof/receipt có thể là dữ li�
 | DOCTOR_DEPLOYMENT_REVIEWED | false; chỉ true sau review admin key/contract/privacy thật |
 | SEPOLIA_RPC_URL | Rỗng; URL RPC server có timeout, không log API key |
 | ANCHOR_CONFIRMATIONS | 3, phải >=1 |
-| DOCTOR_WALLET_DOMAIN | localhost:5173; phải bằng window.location.host lúc ký |
+| DOCTOR_WALLET_DOMAIN | Domain/origin chính; mặc định localhost:5173, các alias loopback cùng port được hỗ trợ |
+| DOCTOR_WALLET_ALLOWED_ORIGINS | Allowlist origin chính xác, phân cách bằng dấu phẩy; khi cấu hình sẽ thay danh sách mặc định |
 | DOCTOR_API_TARGET | Vite proxy target, mặc định loopback8080; dùng8081 cho fixture demo |
 
 Không có private-key/deployer-key env cần cho Doctor Backend. Không nhét SEPOLIA_RPC_URL có API key vào VITE_*.
@@ -400,7 +407,7 @@ Không thêm API Admin vào Doctor với policy JWT Doctor hoặc nới permitAl
 ### Thử trên website
 
 1. Khởi động lại Java bản đã sửa và chạy Vite như hướng dẫn frontend handoff. Dùng đúng Backend/proxy,
-   port5173; DOCTOR_WALLET_DOMAIN phải bằng host trang đang mở, ví dụ localhost:5173 (khác127.0.0.1:5173).
+   port5173; origin trang phải thuộc walletOrigins cấu hình Backend. V2 hỗ trợ mặc định localhost/127.0.0.1 cùng port local.
 2. Đăng nhập tài khoản Doctor PENDING hiện có. Vào **Hồ sơ cá nhân**; không đăng ký lại tài khoản trùng.
 3. Chọn Sepolia trong MetaMask, chọn ví EOA của chính Doctor, bấm **Kết nối MetaMask**.
    Chưa có DOCTOR_ROLE vẫn được bấm ký; đây chưa phải bằng chứng sở hữu.
@@ -454,7 +461,7 @@ Không cần bật hai gate Blockchain hoặc RPC Backend chỉ để liên kế
 - JwtAuthenticationFilter giữ nguyên kiểm JWT, truyền mã nguyên nhân thay vì xóa chi tiết thành một lỗi tài khoản chung.
 - SecurityErrors serialize JSON đúng escaping; SecurityConfig vẫn bảo vệ `/api/doctor/**` bằng role DOCTOR,
   chỉ bổ sung code cho401/403, không thêm permitAll.
-- BlockchainController.config() thêm `walletLinkPolicy=PENDING_APPROVED_V1` cho client kiểm tương thích.
+- Mốc trước dùng `walletLinkPolicy=PENDING_APPROVED_V1`; bản hiện tại dùng `PENDING_APPROVED_V2_ORIGIN`, kèm walletOrigins.
   Frontend thiếu marker sẽ dừng trước ký và yêu cầu khởi động lại đúng Backend.
   Marker chỉ là thông tin phiên bản, không phải bằng chứng cấp quyền; server vẫn kiểm danh tính/trạng thái ở từng API.
 - api.js đọc code riêng, hỗ trợ một số message legacy được liệt kê sẵn, giữ path/method/status cho UI;
@@ -492,7 +499,7 @@ Thông báo ví sẽ ghi rõ ví dụ `Tạo challenge · HTTP 403 · ACCOUNT_DI
    Giữ ddl-auto=validate/sql.init.mode=never. Không đổi schema hoặc role để xử lý403.
 3. Vite đang chạy nhận HMR; Ctrl+F5 và đăng nhập lại. Nếu Vite đã dừng, chạy `npm.cmd run dev` trong Doctor/frontend.
 4. Mở Profile, kết nối Sepolia đúng ví, bấm ký challenge. GET blockchain/config phải có walletLinkPolicy mới.
-   Đặt DOCTOR_WALLET_DOMAIN trùng host website. Không cần bật Blockchain hoặc có DOCTOR_ROLE chỉ để ký.
+   Đặt domain chính/allowlist origin đúng website. Không cần bật Blockchain hoặc có DOCTOR_ROLE chỉ để ký.
 5. Theo Network: config200 → challenges200 → MetaMask personal_sign → verify200 → me/wallet200.
    Kiểm me vẫn PENDING và wallet trả verified=true. Không chuyển sang nghiệp vụ bệnh án khi còn PENDING.
 6. Nếu còn403, cung cấp chỉ method/path/status/code/message của request lỗi, không chia sẻ Authorization,

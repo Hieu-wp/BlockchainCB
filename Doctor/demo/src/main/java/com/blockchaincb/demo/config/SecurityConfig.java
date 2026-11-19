@@ -15,7 +15,9 @@ public class SecurityConfig {
       HttpSecurity http,
       JwtService jwt,
       DoctorIdentityService identities,
-      com.blockchaincb.demo.service.AuditService audit)
+      com.blockchaincb.demo.service.AuditService audit,
+      @org.springframework.beans.factory.annotation.Value("${doctor.http.max-concurrent-requests:0}") int maximumRequests,
+      @org.springframework.beans.factory.annotation.Value("${doctor.http.queue-wait-ms:2000}") long queueWaitMs)
       throws Exception {
     return http.csrf(c -> c.disable())
         .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -48,6 +50,7 @@ public class SecurityConfig {
             new JwtAuthenticationFilter(jwt, identities),
             UsernamePasswordAuthenticationFilter.class)
         .addFilterAfter(new AuditFilter(audit), JwtAuthenticationFilter.class)
+        .addFilterBefore(new DatabaseRequestGate(maximumRequests, queueWaitMs), JwtAuthenticationFilter.class)
         .build();
   }
 }

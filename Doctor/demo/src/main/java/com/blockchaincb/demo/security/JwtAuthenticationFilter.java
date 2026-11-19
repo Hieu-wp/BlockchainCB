@@ -48,6 +48,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         SecurityContextHolder.clearContext();
         SecurityErrors.write(res, 401, "Token khong hop le hoac het han", "TOKEN_INVALID");
         return;
+      } catch (org.springframework.dao.DataAccessException | org.springframework.transaction.TransactionException unavailable) {
+        SecurityContextHolder.clearContext();
+        res.setHeader("Retry-After", "2");
+        SecurityErrors.write(res, 503, "Ket noi database tam thoi khong kha dung", "DATABASE_UNAVAILABLE");
+        return;
       }
     }
     chain.doFilter(req, res);

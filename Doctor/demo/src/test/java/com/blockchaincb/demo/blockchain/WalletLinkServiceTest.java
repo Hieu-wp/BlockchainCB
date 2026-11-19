@@ -56,7 +56,7 @@ class WalletLinkServiceTest {
             challenges,
             users,
             identity,
-            new ChainSettings(false, false, "", "localhost:5173", 3));
+            new WalletOriginPolicy(new ChainSettings(false, false, "", "localhost:5173", 3), ""));
   }
 
   String signature(ECKeyPair signer) {
@@ -72,10 +72,24 @@ class WalletLinkServiceTest {
   void challengeBindsDomainChainIdentityPurposeAndExpires() {
     var c = service.challenge(actor, wallet);
     assertTrue(c.message().contains("Domain: localhost:5173"));
+    assertTrue(c.message().contains("URI: http://localhost:5173"));
     assertTrue(c.message().contains("Chain ID: 11155111"));
     assertTrue(c.message().contains("Doctor: 10"));
     assertTrue(c.message().contains("LINK_DOCTOR_WALLET_ONLY"));
     assertTrue(c.expiresAt().isAfter(Instant.now()));
+  }
+
+  @Test void loopbackAliasIsBoundExactlyInTheSignedMessage() {
+    var c=service.challenge(actor,wallet,"http://127.0.0.1:5173");
+    assertEquals("http://127.0.0.1:5173",c.origin());
+    assertTrue(c.message().contains("Domain: 127.0.0.1:5173\nURI: http://127.0.0.1:5173\n"));
+    assertEquals(wallet,service.verify(actor,c.challengeId(),signature(key)).walletAddress());
+  }
+
+  @Test void unknownOriginCannotCreateChallenge() {
+    assertEquals("WALLET_ORIGIN_NOT_ALLOWED",assertThrows(ApiException.class,
+        ()->service.challenge(actor,wallet,"https://untrusted.example")).getCode());
+    verify(challenges,never()).saveAndFlush(any());
   }
 
   @Test

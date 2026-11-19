@@ -18,22 +18,22 @@ public class WalletLinkService {
   private final WalletChallengeRepository challenges;
   private final UserRepository users;
   private final DoctorIdentityService identities;
-  private final ChainSettings settings;
+  private final WalletOriginPolicy origins;
 
   public WalletLinkService(
       WalletBindingRepository bindings,
       WalletChallengeRepository challenges,
       UserRepository users,
       DoctorIdentityService identities,
-      ChainSettings settings) {
+      WalletOriginPolicy origins) {
     this.bindings = bindings;
     this.challenges = challenges;
     this.users = users;
     this.identities = identities;
-    this.settings = settings;
+    this.origins = origins;
   }
 
-  public record Challenge(String challengeId, String message, Instant expiresAt) {}
+  public record Challenge(String challengeId, String message, Instant expiresAt, String origin) {}
 
   public record Linked(String walletAddress, long chainId, Instant verifiedAt) {}
 
@@ -60,6 +60,11 @@ public class WalletLinkService {
   }
 
   public Challenge challenge(DoctorPrincipal actor, String address) {
+    return challenge(actor, address, origins.primaryOrigin());
+  }
+
+  public Challenge challenge(DoctorPrincipal actor, String address, String requestedOrigin) {
+    String origin = origins.requireAllowed(requestedOrigin);
     var d = identities.walletLinkAllowed(actor);
     var user =
         users
@@ -87,9 +92,9 @@ public class WalletLinkService {
     c.expiresAt = Instant.now().plusSeconds(300);
     c.message =
         "MedLedger wallet ownership verification\nDomain: "
-            + settings.domain
-            + "\nURI: https://"
-            + settings.domain
+            + java.net.URI.create(origin).getRawAuthority()
+            + "\nURI: "
+            + origin
             + "\nChain ID: "
             + ChainSettings.CHAIN
             + "\nUser: "
@@ -105,7 +110,7 @@ public class WalletLinkService {
             + "\nExpires: "
             + c.expiresAt;
     challenges.saveAndFlush(c);
-    return new Challenge(c.id, c.message, c.expiresAt);
+    return new Challenge(c.id, c.message, c.expiresAt, origin);
   }
 
   public Linked verify(DoctorPrincipal actor, String id, String signature) {

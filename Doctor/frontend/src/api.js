@@ -1,4 +1,5 @@
 import { encryptCredentials } from './authEncryption';
+import { apiSlot } from './apiQueue';
 let token = null;
 let generation = 0;
 export function setToken(value) { token = value; generation++; }
@@ -17,7 +18,10 @@ export async function request(path, { method = 'GET', body, signal, blob = false
   const headers = token ? { Authorization: `Bearer ${token}` } : {};
   if (body && !(body instanceof FormData)) headers['Content-Type'] = 'application/json';
   let response;
-  try { response = await fetch(`/api${path}`, { method, headers, body: body instanceof FormData ? body : body ? JSON.stringify(body) : undefined, signal, cache: 'no-store', credentials: 'omit' }); }
+  try { response = await apiSlot(signal, async () => {
+    if (current !== generation) throw new DOMException('Phiên đã thay đổi', 'AbortError');
+    return fetch(`/api${path}`, { method, headers, body: body instanceof FormData ? body : body ? JSON.stringify(body) : undefined, signal, cache: 'no-store', credentials: 'omit' });
+  }); }
   catch (e) { if (e.name === 'AbortError') throw e; throw new ApiError(0, 'Không kết nối được máy chủ. Kiểm tra Backend và proxy local.'); }
   if (current !== generation) throw new DOMException('Phiên đã thay đổi', 'AbortError');
   if (!response.ok) {
@@ -35,6 +39,12 @@ export async function request(path, { method = 'GET', body, signal, blob = false
       } catch { /* Do not display arbitrary server bodies, SQL or HTML. */ }
     }
     const serviceMessages = {
+      SHARED_WRITE_MIGRATION_REQUIRED: 'Chưa áp dụng migration metadata Doctor cho bệnh án chung. Cần nhóm duyệt SQL trước khi bật lưu.',
+      VERSION_CONFLICT: 'Hồ sơ đã có phiên bản mới. Tải lại trước khi lưu.',
+      PUBLIC_INTEGRITY_UNVERIFIED: 'Phiên bản chưa có bằng chứng hash hợp lệ; không thể cập nhật tự động.',
+      ONLY_RECORD_AUTHOR_CAN_UPDATE: 'Chỉ bác sĩ lập hồ sơ này được tạo phiên bản cập nhật.',
+      DATABASE_BUSY: 'Backend đang xử lý nhiều yêu cầu. Vui lòng đợi rồi thử lại.',
+      DATABASE_UNAVAILABLE: 'Kết nối database tạm thời không khả dụng hoặc hết thời gian chờ. Vui lòng đợi rồi thử lại; kiểm tra lịch sử trước khi gửi lại thao tác lưu.',
       AUTH_ENVELOPE_INVALID: 'Yêu cầu đăng nhập mã hóa không hợp lệ hoặc đã hết hạn. Nhập lại mật khẩu và thử lại.',
       AUTH_CHALLENGE_BUSY: 'Máy chủ đang có nhiều yêu cầu đăng nhập. Vui lòng đợi một lúc rồi thử lại.',
       SHARED_RECORDS_NOT_READY: 'Bệnh án chung chưa được tích hợp. Chờ đối chiếu schema và thống nhất quyền ghi với Patient; không dùng ID bệnh nhân chung cho bệnh án cũ.',
@@ -57,6 +67,12 @@ async function encryptedAuth(purpose, credentials) {
   return request(`/auth/doctor/${purpose}/encrypted`, {method:'POST',body});
 }
 export const api = {
+  clinicalAccess: (patient,signal) => request(`/doctor/shared-patients/${patient}/clinical-access`,{signal}),
+  clinicalCreate: body => request('/doctor/shared-records',{method:'POST',body}),
+  clinicalUpdate: (id,body) => request(`/doctor/shared-records/${id}/versions`,{method:'POST',body}),
+  sharedIntegrity: (id,number,signal) => request(`/doctor/shared-records/${id}/versions/${number}/integrity`,{signal}),
+  clinicalUpload: (patient,file) => {const body=new FormData();body.append('file',file);return request(`/doctor/shared-patients/${patient}/uploads`,{method:'POST',body});},
+  clinicalDownload: (id,number,file) => request(`/doctor/shared-records/${id}/versions/${number}/attachments/${file}`,{blob:true}),
   sharedRecords: (patientCode='',page=0,signal) => request(`/doctor/shared-records?patientCode=${encodeURIComponent(patientCode)}&page=${page}&size=10`,{signal}),
   sharedPatientRecords: (patient,page=0,signal) => request(`/doctor/shared-patients/${patient}/records?page=${page}&size=10`,{signal}),
   sharedRecord: (id,signal) => request(`/doctor/shared-records/${id}`,{signal}),

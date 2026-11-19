@@ -14,6 +14,9 @@ import org.springframework.stereotype.Repository;
 public class SharedRecordRepository {
   private final JdbcTemplate jdbc;
   private final SharedGrantRepository grants;
+  private final MetadataMemo<Boolean> metadata=new MetadataMemo<>();
+  @org.springframework.beans.factory.annotation.Value("${doctor.integration.schema-cache-ms:0}")
+  private long schemaCacheMs;
 
   public SharedRecordRepository(JdbcTemplate jdbc, SharedGrantRepository grants) {
     this.jdbc = jdbc;
@@ -34,6 +37,9 @@ public class SharedRecordRepository {
   }
 
   public void contract() {
+    metadata.get(schemaCacheMs,()->{inspectContract();return true;});
+  }
+  private void inspectContract() {
     try {
       jdbc.execute(
           (org.springframework.jdbc.core.ConnectionCallback<Void>)

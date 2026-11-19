@@ -14,6 +14,9 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class SharedGrantRepository {
   private final JdbcTemplate jdbc;
+  private final MetadataMemo<Contract> metadata=new MetadataMemo<>();
+  @org.springframework.beans.factory.annotation.Value("${doctor.integration.schema-cache-ms:0}")
+  private long schemaCacheMs;
 
   public SharedGrantRepository(JdbcTemplate jdbc) {
     this.jdbc = jdbc;
@@ -36,10 +39,12 @@ public class SharedGrantRepository {
   }
 
   /**
-   * Read metadata before every operation, so a changed FK cannot silently change identity
-   * semantics.
+   * Revalidate structural metadata after the bounded TTL; permissions are always queried live.
    */
   public Contract contract() {
+    return metadata.get(schemaCacheMs,this::inspectContract);
+  }
+  private Contract inspectContract() {
     try {
       return jdbc.execute(
           (org.springframework.jdbc.core.ConnectionCallback<Contract>)

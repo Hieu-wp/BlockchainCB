@@ -18,7 +18,7 @@ beforeEach(() => {
 });
 async function connect() {
   await userEvent.click(screen.getByRole('button', { name: 'Kết nối MetaMask' }));
-  await screen.findByText('Vai trò Blockchain của ví đang kết nối: Chưa có DOCTOR_ROLE');
+  await screen.findByText(/Vai trò Blockchain của ví đang kết nối: Chưa có/);
 }
 it('lets PENDING connect and sign without role, reloads backend profile, and shows waiting for Admin', async () => {
   const onLinked = vi.fn(async () => { anchorApi.wallet.mockResolvedValue(verified); });

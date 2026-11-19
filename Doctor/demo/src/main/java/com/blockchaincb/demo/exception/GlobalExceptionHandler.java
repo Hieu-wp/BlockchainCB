@@ -12,6 +12,16 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+  @ExceptionHandler({org.springframework.transaction.CannotCreateTransactionException.class,
+      org.springframework.transaction.TransactionTimedOutException.class,
+      org.springframework.dao.DataAccessResourceFailureException.class,
+      org.springframework.dao.TransientDataAccessResourceException.class,
+      org.springframework.dao.QueryTimeoutException.class})
+  ResponseEntity<?> databaseUnavailable(Exception e) {
+    return ResponseEntity.status(503).header("Retry-After", "2")
+        .body(Map.of("status", 503, "code", "DATABASE_UNAVAILABLE",
+            "message", "Ket noi database tam thoi khong kha dung"));
+  }
   private ResponseEntity<?> error(int status, String message) {
     return ResponseEntity.status(status).body(Map.of("status", status, "message", message));
   }

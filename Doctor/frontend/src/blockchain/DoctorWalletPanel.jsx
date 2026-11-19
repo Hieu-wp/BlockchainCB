@@ -41,7 +41,7 @@ export default function DoctorWalletPanel({ linkedWallet, approvalStatus, onLink
     {!eligible && <p role="alert">Trạng thái hồ sơ không cho phép liên kết ví. Hãy liên hệ Admin.</p>}
     <button type="button" disabled={busy || !eligible} onClick={() => perform(false)}>{busy ? 'Đang xử lý…' : 'Kết nối MetaMask'}</button>
     {wallet && <><p>Đã kết nối MetaMask: <code>{wallet.address}</code> · Sepolia</p>
-      <p>{wallet.hasDoctorRole === true ? 'Vai trò Blockchain của ví đang kết nối: Có DOCTOR_ROLE' : wallet.hasDoctorRole === false ? 'Vai trò Blockchain của ví đang kết nối: Chưa có DOCTOR_ROLE' : 'Chưa đọc được DOCTOR_ROLE. Bạn vẫn có thể chứng minh sở hữu ví; thử kiểm tra vai trò lại sau.'}</p>
+      <p>{wallet.hasDoctorRole === true ? 'Vai trò Blockchain của ví đang kết nối: Có DOCTOR_ROLE' : wallet.hasDoctorRole === false ? 'Vai trò Blockchain của ví đang kết nối: Chưa có vai trò' : 'Chưa đọc được vai trò. Bạn vẫn có thể chứng minh sở hữu ví; thử kiểm tra vai trò lại sau.'}</p>
       {proof?.verified && !wrongWallet && wallet.hasDoctorRole === false && <p role="status">Ví đã liên kết thành công. Đang chờ Admin cấp quyền Blockchain.</p>}
       {wrongWallet && <p role="alert">Sai ví Doctor. Chọn đúng ví đã xác minh tại Backend rồi kết nối lại.</p>}
       <button type="button" disabled={busy || !eligible || wrongWallet || alreadyVerified} onClick={() => perform(true)}>{alreadyVerified ? 'Ví này đã được xác minh' : 'Ký challenge và liên kết ví'}</button></>}

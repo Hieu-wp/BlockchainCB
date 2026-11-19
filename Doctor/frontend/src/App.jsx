@@ -22,6 +22,8 @@ import DoctorWalletPanel from "./blockchain/DoctorWalletPanel";
 import AnchorVersionButton from "./blockchain/AnchorVersionButton";
 import AccessGrantRequests from './AccessGrantRequests';
 import { SharedRecordHistory, SharedRecordDetail, SharedRecordTable } from './SharedRecordViews';
+import SharedClinicalForm from './SharedClinicalForm';
+import { useResource } from './useResource';
 /**
  * AuthContext: chia sẻ thông tin bác sĩ đã đăng nhập giữa các trang.
  */
@@ -39,6 +41,7 @@ const Auth = createContext(null);
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(null), [active, setActive] = useState(false), [notice, setNotice] = useState('');
     const expiry = useRef(null);
+    const refreshing = useRef(null);
     /**
      * Đăng xuất: dừng đồng hồ hết hạn, xóa JWT khỏi bộ nhớ và đặt user=null.
      * Được gọi khi người dùng nhấn Đăng xuất hoặc token bị hết hạn.
@@ -46,18 +49,16 @@ export function AuthProvider({ children }) {
     function logout(message = '') { clearTimeout(expiry.current); setToken(null); setUser(null); setActive(false); setNotice(message); }
     /**
      * Tải lại hồ sơ Doctor từ Backend bằng api.me(), cập nhật quyền APPROVED/PENDING.
-     * Nếu lỗi xác thực (trừ AbortError), xóa phiên và thông báo người dùng.
+     * Chỉ đăng xuất khi Backend trả 401/403; lỗi DB/mạng tạm thời không xóa phiên.
      */
-    async function refresh() { try {
-        const me = await api.me();
-        setUser(me);
-        return me;
+    function refresh() {
+        if (refreshing.current) return refreshing.current;
+        const pending=api.me().then(me=>{setUser(me);return me;}).catch(e=>{
+            if(e.status===401 || e.status===403)logout(e.message);
+            throw e;
+        }).finally(()=>{if(refreshing.current===pending)refreshing.current=null;});
+        refreshing.current=pending;return pending;
     }
-    catch (e) {
-        if (e.name !== 'AbortError')
-            logout(e.message);
-        throw e;
-    } }
     /**
      * Đăng nhập: api.login() -> nhận JWT -> api.me() lấy hồ sơ -> kích hoạt phiên.
      * Giải mã exp chỉ phục vụ đồng hồ phía client; Backend vẫn xác minh token ở mỗi API.
@@ -72,7 +73,8 @@ export function AuthProvider({ children }) {
             setNotice('');
             let ms = 3600000;
             try {
-                ms = JSON.parse(atob(result.token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).exp * 1000 - Date.now();
+                const exp = JSON.parse(atob(result.token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).exp;
+                if (Number.isFinite(exp)) ms = exp * 1000 - Date.now();
             }
             catch { /* API remains authoritative */ }
             clearTimeout(expiry.current);
@@ -112,22 +114,7 @@ const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(
  * Luồng: loader(signal) thường là api.patients/api.records/api.record/...; trả về data, loading, error và reload().
  */
 export function useLoad(loader, deps = [], live = true) {
-    const [state, setState] = useState({ data: null, error: '', loading: true });
-    const [tick, setTick] = useState(0);
-    useEffect(() => {
-        const controller = new AbortController();
-        setState({ data: null, error: '', loading: true });
-        loader(controller.signal).then(data => { if (!controller.signal.aborted)
-            setState({ data, error: '', loading: false }); }).catch(e => { if (!controller.signal.aborted && e.name !== 'AbortError')
-            setState({ data: null, error: e.message, loading: false }); });
-        const reload = () => { if (!document.hidden)
-            setTick(t => t + 1); };
-        const timer = live ? setInterval(reload, 30000) : null;
-        if (live)
-            window.addEventListener('focus', reload);
-        return () => { controller.abort(); clearInterval(timer); window.removeEventListener('focus', reload); };
-    }, [...deps, tick, live]);
-    return { ...state, reload: () => setTick(t => t + 1) };
+    return useResource(loader, deps, live);
 }
 
 // =============================================================================
@@ -169,7 +156,7 @@ function Empty({ text = 'Chưa có dữ liệu để hiển thị.' }) { return 
  * Luồng: Khi lỗi, nút Thử tải lại gọi state.reload().
  */
 function LoadState({ state, children }) { return state.loading ? <Loading /> : state.error ? <><ErrorBox>{state.error}</ErrorBox><button className="secondary" onClick={state.reload}>
-    <RefreshCw size={16}/>Thử tải lại</button></> : children(state.data); }
+    <RefreshCw size={16}/>Thử tải lại</button></> : <>{state.warning && <p role="status" className="alert">{state.warning}</p>}{children(state.data)}</>; }
 /**
  * Tiêu đề, mô tả và nút thao tác trên từng trang.
  * Luồng: Chỉ phục vụ giao diện, không gọi API.
@@ -409,7 +396,8 @@ function ApprovedRoutes() { return <Routes>
   <Route path="patients" element={<Patients />}/>
   <Route path="patients/:patientId" element={<PatientRecords />}/>
   <Route path="records" element={<History />}/>
-  <Route path="records/new" element={<RecordForm />}/>
+  <Route path="records/new" element={<CreateRecordRoute />}/>
+  <Route path="shared-records/:id/edit" element={<SharedClinicalForm />}/>
   <Route path="records/:id/edit" element={<EditRecord />}/>
   <Route path="records/:id" element={<RecordDetail />}/>
   <Route path="shared-records/:id" element={<SharedRecordDetail />}/>
@@ -469,7 +457,7 @@ finally {
  * Luồng: Gọi song song api.patients() và api.records(); Backend mới quyết định quyền xem.
  */
 function Dashboard() { const { user } = useAuth(); const state = useLoad(async (signal) => { const config = await api.integration(signal); const [patients, records] = await Promise.all([api.patients('', 0, signal), config.sharedGrantsEnabled ? (config.sharedHistoryReady ? api.sharedRecords('', 0, signal) : Promise.resolve(null)) : api.records('', 0, signal)]); return { patients, records, shared:config.sharedGrantsEnabled }; }); return <><PageTitle eyebrow="TỔNG QUAN HÔM NAY" title={`Chào bác sĩ ${user.fullName}`} description="Mọi thông tin cần thiết cho một ngày chăm sóc hiệu quả." action={<Link className="button" to="/patients">
-    <Plus size={18}/>Tạo hồ sơ khám</Link>}/><LoadState state={state}>{({ patients, records, shared }) => <><div className="stats">
+    <Plus size={18}/>Chọn bệnh nhân để tạo hồ sơ khám</Link>}/><LoadState state={state}>{({ patients, records, shared }) => <><div className="stats">
         <Stat icon={<Users />} label="Bệnh nhân được cấp quyền" value={patients.totalElements} note="Quyền đọc còn hiệu lực"/>
         <Stat icon={<ClipboardList />} label="Hồ sơ do bạn tạo" value={records ? records.totalElements : 'Chờ tích hợp'} note="Còn quyền xem hiện hành"/>
         <Stat icon={<ShieldCheck />} label="Tài khoản hành nghề" value="Đã duyệt" note="Kiểm tra từ Backend"/>
@@ -482,7 +470,7 @@ function Dashboard() { const { user } = useAuth(); const state = useLoad(async (
             </div>
             <Link to="/records">Xem tất cả →</Link>
           </div>
-          {records ? (shared ? <SharedRecordTable data={records}/> : <RecordTable data={records}/>) : <Empty text="Bệnh án chung đang chờ xác minh schema và quyền ghi; chưa có dữ liệu hồ sơ để hiển thị."/>}
+          {records ? (shared ? <SharedRecordTable data={records}/> : <RecordTable data={records}/>) : <Empty text="Bệnh án chung đang chờ xác minh; chưa có dữ liệu hồ sơ để hiển thị."/>}
         </section>
         <aside className="panel care-card">
           <div className="care-art">
@@ -645,6 +633,7 @@ function EditRecord() { const { id } = useParams(); const state = useLoad(s => a
  * Form tạo hồ sơ khám hoặc cập nhật thành phiên bản mới.
  * Luồng: Gọi api.patientRecords() để kiểm tra quyền xem; api.upload() tải tệp; api.create()/api.update() để lưu.
  */
+function CreateRecordRoute(){const config=useLoad(s=>api.integration(s),[],false);return <LoadState state={config}>{c=>c.sharedGrantsEnabled?<SharedClinicalForm/>:<RecordForm/>}</LoadState>;}
 function RecordForm({ existing }) {
     const [params] = useSearchParams();
     const navigate = useNavigate();

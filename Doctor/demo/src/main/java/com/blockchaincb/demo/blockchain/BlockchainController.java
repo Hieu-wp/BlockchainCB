@@ -14,15 +14,18 @@ public class BlockchainController {
   private final WalletLinkService wallets;
   private final AnchorService anchors;
   private final ChainSettings settings;
+  private final WalletOriginPolicy origins;
 
   public BlockchainController(
-      WalletLinkService wallets, AnchorService anchors, ChainSettings settings) {
+      WalletLinkService wallets, AnchorService anchors, ChainSettings settings, WalletOriginPolicy origins) {
     this.wallets = wallets;
     this.anchors = anchors;
     this.settings = settings;
+    this.origins = origins;
   }
 
-  public record WalletRequest(@NotBlank @Pattern(regexp = "0x[0-9a-fA-F]{40}") String address) {}
+  public record WalletRequest(@NotBlank @Pattern(regexp = "0x[0-9a-fA-F]{40}") String address,
+      @NotBlank @Size(max = 255) String origin) {}
 
   public record SignatureRequest(
       @NotBlank @Size(max = 64) String challengeId,
@@ -41,7 +44,7 @@ public class BlockchainController {
       long chainId,
       String contractAddress,
       String domain,
-      String walletLinkPolicy) {}
+      String walletLinkPolicy, java.util.List<String> walletOrigins) {}
 
   @GetMapping("/blockchain/config")
   public Config config() {
@@ -49,8 +52,8 @@ public class BlockchainController {
         settings.enabled && settings.reviewed && !settings.rpc.isBlank(),
         ChainSettings.CHAIN,
         ChainSettings.CONTRACT,
-        settings.domain,
-        "PENDING_APPROVED_V1");
+        origins.primaryDomain(),
+        "PENDING_APPROVED_V2_ORIGIN", origins.allowedOrigins());
   }
 
   @GetMapping("/wallet")
@@ -60,8 +63,11 @@ public class BlockchainController {
 
   @PostMapping("/wallet/challenges")
   public WalletLinkService.Challenge challenge(
-      @AuthenticationPrincipal DoctorPrincipal p, @Valid @RequestBody WalletRequest r) {
-    return wallets.challenge(p, r.address());
+      @AuthenticationPrincipal DoctorPrincipal p, @Valid @RequestBody WalletRequest r,
+      @RequestHeader(value = "Origin", required = false) String browserOrigin) {
+    if (browserOrigin != null && !browserOrigin.equals(r.origin()))
+      throw new com.blockchaincb.demo.exception.ApiException(403, "WALLET_ORIGIN_NOT_ALLOWED");
+    return wallets.challenge(p, r.address(), r.origin());
   }
 
   @PostMapping("/wallet/verify")

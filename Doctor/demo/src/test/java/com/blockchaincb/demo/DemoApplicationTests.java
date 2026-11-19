@@ -766,6 +766,27 @@ class DemoApplicationTests {
 
   record WalletFixture(String address, String challengeId, String signature) {}
 
+  @Test void walletChallengeUsesApprovedOriginAndRejectsForeignOriginWithoutPersisting() throws Exception {
+    long id=register("origin-wallet@example.test");String token=login("origin-wallet@example.test");
+    String address="0x"+"1".repeat(40);
+    mvc.perform(post("/api/doctor/wallet/challenges").header("Authorization","Bearer "+token)
+        .header("Origin","http://127.0.0.1:5173").contentType(MediaType.APPLICATION_JSON)
+        .content("{\"address\":\""+address+"\",\"origin\":\"http://127.0.0.1:5173\"}"))
+        .andExpect(status().isOk()).andExpect(jsonPath("$.origin").value("http://127.0.0.1:5173"))
+        .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("Domain: 127.0.0.1:5173\nURI: http://127.0.0.1:5173\n")));
+    for(String origin:List.of("https://untrusted.example","http://localhost:4173"))
+      mvc.perform(post("/api/doctor/wallet/challenges").header("Authorization","Bearer "+token)
+          .contentType(MediaType.APPLICATION_JSON).content("{\"address\":\""+address+"\",\"origin\":\""+origin+"\"}"))
+          .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("WALLET_ORIGIN_NOT_ALLOWED"));
+    mvc.perform(post("/api/doctor/wallet/challenges").header("Authorization","Bearer "+token)
+        .header("Origin","https://untrusted.example").contentType(MediaType.APPLICATION_JSON)
+        .content("{\"address\":\""+address+"\",\"origin\":\"http://localhost:5173\"}"))
+        .andExpect(status().isForbidden());
+    assertEquals(1,db.queryForObject("SELECT count(*) FROM doctor_backend.wallet_challenges",Integer.class));
+    assertEquals(0,db.queryForObject("SELECT count(*) FROM doctor_backend.wallet_bindings",Integer.class));
+    assertEquals("PENDING",db.queryForObject("SELECT approval_status FROM public.doctors WHERE id=?",String.class,id));
+  }
+
   WalletFixture linkFixture(Actor actor) throws Exception {
     var wallet = challengeFixture(actor);
     verifyWallet(actor, wallet)
@@ -782,7 +803,7 @@ class DemoApplicationTests {
                 post("/api/doctor/wallet/challenges")
                     .header("Authorization", "Bearer " + actor.token())
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content("{\"address\":\"" + address + "\"}"))
+                    .content("{\"address\":\"" + address + "\",\"origin\":\"http://localhost:5173\"}"))
             .andExpect(status().isOk())
             .andReturn();
     String id = JsonPath.read(response.getResponse().getContentAsString(), "$.challengeId");
@@ -866,7 +887,8 @@ class DemoApplicationTests {
     var actor = new Actor(id, token);
     mvc.perform(get("/api/doctor/blockchain/config").header("Authorization", "Bearer " + token))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.walletLinkPolicy").value("PENDING_APPROVED_V1"));
+        .andExpect(jsonPath("$.walletLinkPolicy").value("PENDING_APPROVED_V2_ORIGIN"))
+        .andExpect(jsonPath("$.walletOrigins").isArray());
     var wallet = linkFixture(actor);
     mvc.perform(get("/api/doctor/me").header("Authorization", "Bearer " + token))
         .andExpect(status().isOk())
@@ -944,7 +966,7 @@ class DemoApplicationTests {
               post("/api/doctor/wallet/challenges")
                   .header("Authorization", "Bearer " + actor.token())
                   .contentType(MediaType.APPLICATION_JSON)
-                  .content("{\"address\":\"" + challenge.address() + "\"}"))
+                  .content("{\"address\":\"" + challenge.address() + "\",\"origin\":\"http://localhost:5173\"}"))
           .andExpect(status().isForbidden())
           .andExpect(jsonPath("$.code").value(change.getValue()));
       verifyWallet(actor, challenge)
@@ -976,7 +998,7 @@ class DemoApplicationTests {
             post("/api/doctor/wallet/challenges")
                 .header("Authorization", "Bearer " + other.token())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"address\":\"" + challenge.address() + "\"}"))
+                .content("{\"address\":\"" + challenge.address() + "\",\"origin\":\"http://localhost:5173\"}"))
         .andExpect(status().isConflict());
     assertEquals(
         1, db.queryForObject("SELECT count(*) FROM doctor_backend.wallet_bindings", Integer.class));

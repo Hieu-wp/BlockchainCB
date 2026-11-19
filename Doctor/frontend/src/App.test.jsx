@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 
@@ -50,6 +50,34 @@ function mount(path = '/login') {
     </MemoryRouter>
   );
 }
+
+it('keeps the authenticated session when a background profile refresh receives temporary 503',async()=>{
+  let unavailable=false;
+  const fetch=vi.fn(url=>Promise.resolve(url.includes('/login')?json({token:'local.token'}):
+    unavailable&&url.endsWith('/me')?{ok:false,status:503,json:async()=>({code:'DATABASE_BUSY'})}:
+    json({id:1,fullName:'Fixture Doctor',approvalStatus:'PENDING',specialtyId:2})));
+  vi.stubGlobal('fetch',fetch);mount();
+  await userEvent.type(screen.getByLabelText('Email'),'refresh@example.test');await userEvent.type(screen.getByLabelText('Mật khẩu'),'Test-only!123');
+  await userEvent.click(screen.getByRole('button',{name:/Đăng nhập vào/}));
+  await screen.findByRole('heading',{name:'Hồ sơ của bạn đang được xem xét'});
+  const reads=fetch.mock.calls.filter(([url])=>url.endsWith('/me')).length;unavailable=true;
+  await act(async()=>{window.dispatchEvent(new Event('focus'));});
+  await waitFor(()=>expect(fetch.mock.calls.filter(([url])=>url.endsWith('/me')).length).toBeGreaterThan(reads));
+  expect(screen.getByRole('heading',{name:'Hồ sơ của bạn đang được xem xét'})).toBeInTheDocument();
+  expect(screen.queryByRole('heading',{name:'Đăng nhập'})).not.toBeInTheDocument();
+});
+
+it('does not launch overlapping reloads on focus while the previous read is still pending',async()=>{
+  vi.useFakeTimers();let complete;
+  const loader=vi.fn(()=>new Promise(resolve=>{complete=resolve;}));
+  function Resource(){const state=useLoad(loader);return <p>{state.data||'loading'}</p>;}
+  try{
+    render(<Resource/>);expect(loader).toHaveBeenCalledTimes(1);
+    await act(async()=>{vi.advanceTimersByTime(6500);window.dispatchEvent(new Event('focus'));window.dispatchEvent(new Event('focus'));});
+    expect(loader).toHaveBeenCalledTimes(1);
+    await act(async()=>{complete('done');});expect(screen.getByText('done')).toBeInTheDocument();
+  }finally{vi.useRealTimers();}
+});
 
 it.each(['/login', '/register'])('clears the password during a pending request and after failure on %s', async path => {
   let complete;

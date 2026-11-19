@@ -39,7 +39,10 @@ public class SharedRecordService {
     long doctor = guard(actor);
     if (patient != null) grants.requireReadLocked(patient, doctor);
     var result = records.history(doctor, actor.doctorId(), code, patient, page);
-    for (var r : result) grants.requireReadLocked(r.patientId(), doctor);
+    // One current-consent check per patient, not per record. Stable lock order
+    // also avoids inverse patient lock acquisition between concurrent history reads.
+    result.getContent().stream().map(Summary::patientId).distinct().sorted()
+        .forEach(patientId -> grants.requireReadLocked(patientId, doctor));
     return result;
   }
 

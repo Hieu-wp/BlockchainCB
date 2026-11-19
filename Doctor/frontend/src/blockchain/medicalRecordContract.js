@@ -36,12 +36,23 @@ export async function connectDoctorWallet({ requestAccess = true } = {}) {
 }
 export async function linkDoctorWallet(address, stillCurrent = () => true) {
   const { walletClient } = clients(); const config = await anchorApi.config();
-  if (config.walletLinkPolicy !== 'PENDING_APPROVED_V1') throw Object.assign(new Error('Backend cần khởi động lại để hỗ trợ liên kết ví PENDING.'), { code: 'WALLET_BACKEND_OUTDATED' });
-  if (config.domain !== window.location.host) throw new Error('Domain ký không khớp trang hiện tại. Kiểm tra DOCTOR_WALLET_DOMAIN.');
+  if (config.walletLinkPolicy !== 'PENDING_APPROVED_V2_ORIGIN') throw Object.assign(new Error('Backend cần khởi động lại để hỗ trợ challenge gắn đúng origin.'), { code: 'WALLET_BACKEND_OUTDATED' });
+  const origin = window.location.origin;
+  if (!Array.isArray(config.walletOrigins) || !config.walletOrigins.includes(origin))
+    throw new Error(`Trang ${origin} chưa được Backend cho phép ký ví. Kiểm tra DOCTOR_WALLET_ALLOWED_ORIGINS hoặc mở đúng địa chỉ React đã cấu hình.`);
   if (await walletClient.getChainId() !== sepolia.id) throw new Error('Cần chọn mạng Sepolia trước khi ký.');
   const [account] = await walletClient.getAddresses();
   if (account?.toLowerCase() !== address.toLowerCase()) throw new Error('Tài khoản MetaMask đã thay đổi. Kết nối lại.');
-  const challenge = await anchorApi.challenge(address);
+  const challenge = await anchorApi.challenge(address, origin);
+  const lines = typeof challenge.message === 'string' ? challenge.message.split('\n') : [];
+  const field = prefix => lines.filter(line => line.startsWith(prefix));
+  if (challenge.origin !== origin
+      || field('Domain: ').length !== 1 || !lines.includes(`Domain: ${window.location.host}`)
+      || field('URI: ').length !== 1 || !lines.includes(`URI: ${origin}`)
+      || !lines.includes('Chain ID: 11155111') || !lines.includes('Purpose: LINK_DOCTOR_WALLET_ONLY')
+      || !lines.includes(`Address: ${address.toLowerCase()}`)
+      || !Number.isFinite(Date.parse(challenge.expiresAt)) || Date.parse(challenge.expiresAt) <= Date.now())
+    throw new Error('Challenge không khớp trang, ví hoặc thời hạn hiện tại. Dừng ký và kiểm tra Backend.');
   if (!stillCurrent()) throw new Error('Ví hoặc mạng đã đổi. Kết nối lại.');
   const signature = await walletClient.signMessage({ account: address, message: challenge.message });
   if (!stillCurrent()) throw new Error('Ví hoặc mạng đã đổi. Không sử dụng chữ ký của phiên cũ.');
@@ -49,13 +60,13 @@ export async function linkDoctorWallet(address, stillCurrent = () => true) {
   if (await walletClient.getChainId() !== sepolia.id || currentAccount?.toLowerCase() !== address.toLowerCase() || !stillCurrent()) throw new Error('Ví hoặc mạng đã đổi sau khi ký. Kết nối lại và ký challenge mới.');
   return anchorApi.verify(challenge.challengeId, signature);
 }
-export async function anchorVersion({ id, number, linkedWallet, onHash, stillCurrent = () => true }) {
+export async function anchorVersion({ id, number, linkedWallet, onHash, stillCurrent = () => true, api = anchorApi }) {
   const { walletClient, publicClient } = clients();
   if (!linkedWallet) throw new Error('Cần liên kết ví bằng chữ ký trong Hồ sơ cá nhân.');
   if (await walletClient.getChainId() !== sepolia.id) throw new Error('Sai mạng. Hãy chọn Ethereum Sepolia (11155111).');
   const [account] = await walletClient.requestAddresses();
   if (account?.toLowerCase() !== linkedWallet.toLowerCase()) throw new Error('Sai ví Doctor. Chọn đúng ví đã xác minh trong Backend.');
-  const p = await anchorApi.prepare(id, number);
+  const p = await api.prepare(id, number);
   if (p.chainId !== sepolia.id || p.contractAddress.toLowerCase() !== CONTRACT_ADDRESS.toLowerCase() || p.doctorWallet.toLowerCase() !== account.toLowerCase()) throw new Error('Cấu hình giao dịch không khớp. Dừng ký.');
   for (const hex of [p.recordKey, p.contentHash, p.previousHash]) if (!/^0x[0-9a-fA-F]{64}$/.test(hex)) throw new Error('Payload bytes32 không hợp lệ.');
   const read = (functionName, args = []) => publicClient.readContract({ address: CONTRACT_ADDRESS, abi, functionName, args });
@@ -72,5 +83,5 @@ export async function anchorVersion({ id, number, linkedWallet, onHash, stillCur
   const hash = await walletClient.writeContract(request);
   onHash?.(hash);
   // Submit even if the UI wallet changed after broadcast; backend verifies the frozen intent.
-  return anchorApi.submit(id, number, hash);
+  return api.submit(id, number, hash);
 }

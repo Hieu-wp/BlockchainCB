@@ -2,20 +2,29 @@ import { request } from '../api.js';
 export const anchorApi = {
   config: () => request('/doctor/blockchain/config'),
   wallet: () => request('/doctor/wallet'),
-  challenge: address => request('/doctor/wallet/challenges', { method: 'POST', body: { address } }),
+  challenge: (address, origin) => request('/doctor/wallet/challenges', { method: 'POST', body: { address, origin } }),
   verify: (challengeId, signature) => request('/doctor/wallet/verify', { method: 'POST', body: { challengeId, signature } }),
   prepare: (id, number) => request(`/doctor/records/${id}/versions/${number}/anchor-payload`, { method: 'POST' }),
   submit: (id, number, transactionHash) => request(`/doctor/records/${id}/versions/${number}/anchor-transactions`, { method: 'POST', body: { transactionHash } }),
   status: (id, number) => request(`/doctor/records/${id}/versions/${number}/anchor-status`),
 };
+export const sharedAnchorApi = {
+  prepare: (id,n) => request(`/doctor/shared-records/${id}/versions/${n}/anchor-payload`,{method:'POST'}),
+  submit: (id,n,transactionHash) => request(`/doctor/shared-records/${id}/versions/${n}/anchor-transactions`,{method:'POST',body:{transactionHash}}),
+  status: (id,n) => request(`/doctor/shared-records/${id}/versions/${n}/anchor-status`),
+};
 export const chainMessages = {
+  SHARED_ANCHOR_MIGRATION_REQUIRED: 'Cần nhóm duyệt và áp dụng migration shared_anchor_v1 trước khi ghi bệnh án chung.',
   BLOCKCHAIN_DISABLED: 'Blockchain đang tắt. Nhóm cần kiểm tra deployment/admin key và cấu hình RPC.',
   WALLET_PROOF_MISSING: 'Ví chưa có bằng chứng sở hữu trong Backend. Cần liên kết bằng chữ ký.',
+  WALLET_ORIGIN_NOT_ALLOWED: 'Địa chỉ trang chưa được Backend cho phép ký ví. Kiểm tra DOCTOR_WALLET_DOMAIN và DOCTOR_WALLET_ALLOWED_ORIGINS rồi khởi động lại Backend.',
+  DATABASE_UNAVAILABLE: 'Kết nối database tạm thời không khả dụng. Vui lòng đợi rồi thử lại.',
+  DATABASE_BUSY: 'Backend đang xử lý yêu cầu khác. Vui lòng đợi rồi thử lại.',
   WALLET_PROOF_MISMATCH: 'Bằng chứng ví không khớp tài khoản hoặc Sepolia.',
   PATIENT_WALLET_MISSING: 'Patient chưa liên kết ví. Liên hệ thành viên Patient.',
   DOCTOR_WALLET_MISSING: 'Bạn cần liên kết ví bằng chữ ký trong Hồ sơ cá nhân.',
-  PATIENT_WRITE_PERMISSION_MISSING: 'Patient chưa cấp grantWrite cho ví Doctor này.',
-  DOCTOR_ROLE_MISSING: 'Ví chưa có DOCTOR_ROLE. Liên hệ Admin; Doctor không tự cấp role.',
+  PATIENT_WRITE_PERMISSION_MISSING: 'Bệnh nhân chưa cấp quyền ghi Blockchain cho bác sĩ.',
+  DOCTOR_ROLE_MISSING: 'Bác sĩ chưa được Admin cấp quyền ghi Blockchain.',
   ONCHAIN_VERSION_ORDER_MISMATCH: 'Sai thứ tự phiên bản. Cần ghi lần lượt từ v1, hoặc kiểm tra giao dịch đã có.',
   ONCHAIN_PREVIOUS_HASH_MISMATCH: 'Hash phiên bản trước không khớp bằng chứng on-chain.',
   CONTENT_INTEGRITY_FAILED: 'Nội dung off-chain không toàn vẹn. Dừng ghi và liên hệ quản trị.',
@@ -42,7 +51,7 @@ export const chainMessages = {
   DOCTOR_APPROVAL_REQUIRED: 'Thao tác này yêu cầu Doctor APPROVED. Bước liên kết ví phải được phục vụ bằng Backend đã hỗ trợ PENDING; hãy kiểm tra và khởi động lại đúng Backend.',
   ACCOUNT_RESTRICTED: 'Backend từ chối tài khoản nhưng bản đang chạy chưa nêu rõ nguyên nhân. Kiểm tra Backend đã khởi động lại; không thể kết luận tài khoản bị khóa.',
   ACCESS_DENIED: 'Backend từ chối quyền truy cập endpoint này. Kiểm tra phiên đăng nhập, route và phiên bản Backend.',
-  WALLET_BACKEND_OUTDATED: 'Backend đang chạy bản chưa hỗ trợ liên kết ví PENDING. Dừng và khởi động lại đúng Doctor Backend đã biên dịch, rồi tải lại trang và đăng nhập lại.',
+  WALLET_BACKEND_OUTDATED: 'Backend và Frontend chưa cùng phiên bản challenge liên kết ví. Khởi động lại đúng Doctor Backend mới, tải lại trang và đăng nhập lại.',
   AUTHENTICATION_REQUIRED: 'Yêu cầu đăng nhập Doctor trước khi liên kết ví.',
   TOKEN_INVALID: 'JWT không hợp lệ hoặc đã hết hạn. Hãy đăng nhập lại.',
 };

@@ -16,16 +16,18 @@ public class SharedGrantController {
   private final SharedGrantRepository repository;
   private final SharedIntegrationSettings settings;
   private final SharedRecordRepository records;
+  private final ClinicalService clinical;
 
   public SharedGrantController(
       SharedGrantService service,
       SharedGrantRepository repository,
       SharedIntegrationSettings settings,
-      SharedRecordRepository records) {
+      SharedRecordRepository records, ClinicalService clinical) {
     this.service = service;
     this.repository = repository;
     this.settings = settings;
     this.records = records;
+    this.clinical = clinical;
   }
 
   public record Request(@NotBlank @Size(max = 128) String patientCode) {}
@@ -41,7 +43,7 @@ public class SharedGrantController {
   public Config config() {
     if (!settings.enabled) return new Config(false, false, false, "UNAGREED", false);
     repository.contract();
-    return new Config(true, true, false, "READ_ONLY_PENDING_TEAM_DECISION", records.available());
+    return new Config(true, true, clinical.available(), "ACTIVE_READ_CREATE_AUTHOR_UPDATE", records.available());
   }
 
   @PostMapping("/access-grants/request")

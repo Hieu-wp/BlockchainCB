@@ -19,21 +19,26 @@ function status(g) {
 export default function AccessGrantRequests({ onChanged }) {
   const [config, setConfig] = useState(null), [code, setCode] = useState(''), [page, setPage] = useState(0);
   const [data, setData] = useState(null), [error, setError] = useState(''), [notice, setNotice] = useState(''), [busy, setBusy] = useState(false);
-  const lock = useRef(false), sequence = useRef(0);
+  const lock = useRef(false), sequence = useRef(0), reading = useRef(null);
   useEffect(() => {
     const abort = new AbortController();
     api.integration(abort.signal).then(setConfig).catch(e => { if (e.name !== 'AbortError') setError(integrationError(e)); });
     return () => { abort.abort(); sequence.current++; };
   }, []);
   async function load() {
+    if (reading.current?.page === page) return reading.current.promise;
     const current = ++sequence.current;
+    const task = (async () => {
     try { const next = await api.accessRequests(page); if (current === sequence.current) { setData(next); setError(''); } }
     catch (e) { if (current === sequence.current) { setData(null); setError(integrationError(e)); } }
+    })();
+    reading.current = {page,promise:task};
+    try { await task; } finally { if (reading.current?.promise === task) reading.current = null; }
   }
   useEffect(() => {
     if (!config?.sharedGrantsEnabled || !config.schemaReady) return;
-    load(); const timer = setInterval(load, 30000); window.addEventListener('focus', load);
-    return () => { sequence.current++; clearInterval(timer); window.removeEventListener('focus', load); };
+    load(); const update = () => { if (!document.hidden) load(); }; const timer = setInterval(update, 30000); window.addEventListener('focus', update);
+    return () => { sequence.current++; clearInterval(timer); window.removeEventListener('focus', update); };
   }, [config?.sharedGrantsEnabled, config?.schemaReady, page]);
   async function submit(e) {
     e.preventDefault(); if (lock.current) return; lock.current = true; setBusy(true); setError(''); setNotice('');
