@@ -1,5 +1,7 @@
 # Bàn giao Java Backend Doctor
 
+> C?p nh?t Doctor?Patient 18/11/2026: xem [DOCTOR_PATIENT_INTEGRATION.md](DOCTOR_PATIENT_INTEGRATION.md) v? feature flag ngu?n quy?n public, API xin quy?n v? gi?i h?n b?nh ?n chung. C?c k?t qu? test b?n d??i c? th? l? k?t qu? l?ch s? c?a phi?n tr??c.
+
 Ngày: 16/11/2026. Phạm vi: Java 17, Spring Boot 4.1.2, JWT, JPA, off-chain records.
 
 **Hoàn thiện về source/local test; chưa hoàn thành tích hợp Supabase và module nhóm.**

@@ -42,11 +42,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         SecurityContextHolder.getContext().setAuthentication(auth);
       } catch (ApiException e) {
         SecurityContextHolder.clearContext();
-        SecurityErrors.write(res, e.getStatus(), "Tai khoan khong duoc phep truy cap");
+        SecurityErrors.write(res, e.getStatus(), e.getMessage(), e.getCode());
         return;
       } catch (JwtException | IllegalArgumentException e) {
         SecurityContextHolder.clearContext();
-        SecurityErrors.write(res, 401, "Token khong hop le hoac het han");
+        SecurityErrors.write(res, 401, "Token khong hop le hoac het han", "TOKEN_INVALID");
         return;
       }
     }

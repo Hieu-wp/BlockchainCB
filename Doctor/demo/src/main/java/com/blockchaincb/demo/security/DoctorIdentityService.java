@@ -19,15 +19,30 @@ public class DoctorIdentityService {
     Doctor d =
         doctors
             .findByUserId(userId)
-            .orElseThrow(() -> new ApiException(403, "Khong co ho so Doctor"));
+            .orElseThrow(
+                () -> new ApiException(403, "DOCTOR_PROFILE_MISSING", "Khong co ho so Doctor"));
     DoctorPolicy.requireAccount(d);
     return d;
   }
 
   @Transactional(readOnly = true)
-  public Doctor approved(DoctorPrincipal p) {
+  public Doctor account(DoctorPrincipal p) {
     Doctor d = load(p.userId());
-    if (!d.getId().equals(p.doctorId())) throw new ApiException(403, "Danh tinh khong hop le");
+    if (!d.getId().equals(p.doctorId()))
+      throw new ApiException(403, "DOCTOR_IDENTITY_MISMATCH", "Danh tinh khong hop le");
+    return d;
+  }
+
+  @Transactional(readOnly = true)
+  public Doctor walletLinkAllowed(DoctorPrincipal p) {
+    Doctor d = account(p);
+    DoctorPolicy.requireWalletLink(d);
+    return d;
+  }
+
+  @Transactional(readOnly = true)
+  public Doctor approved(DoctorPrincipal p) {
+    Doctor d = account(p);
     DoctorPolicy.requireApproved(d);
     return d;
   }

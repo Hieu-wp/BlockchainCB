@@ -17,18 +17,21 @@ public class AttachmentService {
   private final PatientAccessPolicy access;
   private final DoctorIdentityService identities;
   private final HashService hash;
+  private final com.blockchaincb.demo.shared.SharedIntegrationSettings integration;
 
   public AttachmentService(
       AttachmentRepository attachments,
       PrivateStorage storage,
       PatientAccessPolicy access,
       DoctorIdentityService identities,
-      HashService hash) {
+      HashService hash,
+      com.blockchaincb.demo.shared.SharedIntegrationSettings integration) {
     this.attachments = attachments;
     this.storage = storage;
     this.access = access;
     this.identities = identities;
     this.hash = hash;
+    this.integration = integration;
   }
 
   public record UploadResponse(Long id, String mediaType, long sizeBytes, String sha256) {}
@@ -38,6 +41,7 @@ public class AttachmentService {
   @Transactional
   public UploadResponse upload(DoctorPrincipal actor, Long patientId, byte[] bytes) {
     identities.approved(actor);
+    integration.requireLegacyRecords();
     access.require(actor.doctorId(), patientId, PatientAccessPolicy.Action.READ);
     try {
       access.require(actor.doctorId(), patientId, PatientAccessPolicy.Action.CREATE);

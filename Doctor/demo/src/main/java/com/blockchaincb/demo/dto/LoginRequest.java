@@ -10,6 +10,7 @@ public class LoginRequest {
   @jakarta.validation.constraints.Size(max = 255)
   private String email;
 
+  @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.WRITE_ONLY)
   @NotBlank(message = "Mat khau khong duoc de trong")
   private String password;
 

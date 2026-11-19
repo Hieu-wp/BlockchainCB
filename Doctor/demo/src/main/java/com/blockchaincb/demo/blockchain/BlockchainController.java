@@ -36,7 +36,12 @@ public class BlockchainController {
   public record TransactionRequest(
       @NotBlank @Pattern(regexp = "0x[0-9a-fA-F]{64}") String transactionHash) {}
 
-  public record Config(boolean enabled, long chainId, String contractAddress, String domain) {}
+  public record Config(
+      boolean enabled,
+      long chainId,
+      String contractAddress,
+      String domain,
+      String walletLinkPolicy) {}
 
   @GetMapping("/blockchain/config")
   public Config config() {
@@ -44,7 +49,13 @@ public class BlockchainController {
         settings.enabled && settings.reviewed && !settings.rpc.isBlank(),
         ChainSettings.CHAIN,
         ChainSettings.CONTRACT,
-        settings.domain);
+        settings.domain,
+        "PENDING_APPROVED_V1");
+  }
+
+  @GetMapping("/wallet")
+  public WalletLinkService.WalletStatus wallet(@AuthenticationPrincipal DoctorPrincipal p) {
+    return wallets.status(p);
   }
 
   @PostMapping("/wallet/challenges")

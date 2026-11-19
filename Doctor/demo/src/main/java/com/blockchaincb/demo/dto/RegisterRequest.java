@@ -15,6 +15,7 @@ public class RegisterRequest {
   @Size(max = 255)
   private String email;
 
+  @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.WRITE_ONLY)
   @NotBlank(message = "Mat khau khong duoc de trong")
   @Size(min = 8, max = 72, message = "Mat khau phai co it nhat 8 ky tu")
   private String password;

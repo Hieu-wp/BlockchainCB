@@ -34,7 +34,9 @@ class WalletLinkServiceTest {
     user.setId(1L);
     var d = mock(Doctor.class);
     when(d.getId()).thenReturn(10L);
-    when(identity.approved(actor)).thenReturn(d);
+    when(identity.walletLinkAllowed(actor)).thenReturn(d);
+    when(d.getUser()).thenReturn(user);
+    when(identity.account(actor)).thenReturn(d);
     when(users.lockAccount(1L)).thenReturn(Optional.of(user));
     when(challenges.saveAndFlush(any()))
         .thenAnswer(
@@ -148,5 +150,47 @@ class WalletLinkServiceTest {
         400,
         assertThrows(ApiException.class, () -> WalletLinkService.recover("message", "bad"))
             .getStatus());
+  }
+
+  @Test
+  void walletStatusDoesNotTreatLegacyAddressAsVerified() {
+    user.setWalletAddress(wallet);
+    assertEquals(wallet, service.status(actor).walletAddress());
+    assertFalse(service.status(actor).verified());
+    assertNull(service.status(actor).verifiedAt());
+  }
+
+  @Test
+  void walletStatusRequiresMatchingProofAndCurrentChain() {
+    user.setWalletAddress(wallet);
+    var b = new WalletBinding();
+    b.userId = 1L;
+    b.address = wallet;
+    b.chainId = ChainSettings.CHAIN;
+    b.verifiedAt = Instant.now();
+    b.proofMethod = "PERSONAL_SIGN";
+    when(bindings.findById(1L)).thenReturn(Optional.of(b));
+    assertTrue(service.status(actor).verified());
+    b.chainId = 1L;
+    assertFalse(service.status(actor).verified());
+    b.chainId = ChainSettings.CHAIN;
+    b.address = "0x" + "2".repeat(40);
+    assertFalse(service.status(actor).verified());
+  }
+
+  @Test
+  void alreadyVerifiedSameWalletDoesNotNeedAnotherChallenge() {
+    user.setWalletAddress(wallet);
+    var b = new WalletBinding();
+    b.userId = 1L;
+    b.address = wallet;
+    b.chainId = ChainSettings.CHAIN;
+    b.verifiedAt = Instant.now();
+    b.proofMethod = "PERSONAL_SIGN";
+    when(bindings.findById(1L)).thenReturn(Optional.of(b));
+    assertEquals(
+        "WALLET_ALREADY_VERIFIED",
+        assertThrows(ApiException.class, () -> service.challenge(actor, wallet)).getCode());
+    verify(challenges, never()).saveAndFlush(any());
   }
 }

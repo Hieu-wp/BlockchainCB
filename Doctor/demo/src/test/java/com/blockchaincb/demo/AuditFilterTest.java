@@ -27,6 +27,7 @@ class AuditFilterTest {
     var response=new MockHttpServletResponse();
     new AuditFilter(audit).doFilter(request,response,(req,res) -> fail("Operation must not run without audit"));
     assertEquals(503,response.getStatus());
+    assertTrue(response.getContentAsString().contains("AUDIT_UNAVAILABLE"));
   }
   @Test void failedOutcomeAuditDoesNotReleaseMedicalResponse() throws Exception {
     doNothing().doThrow(new IllegalStateException("offline")).when(audit).record(anyLong(),anyString(),anyString(),anyString());

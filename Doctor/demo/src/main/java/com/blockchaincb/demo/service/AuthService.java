@@ -35,7 +35,7 @@ public class AuthService {
 
     if (!specialtyRepository.existsById(request.getSpecialtyId())) {
       throw new com.blockchaincb.demo.exception.ApiException(400, "Chuyen khoa khong ton tai");
-    }
+    } //kiem tra chuyen khoa
     if (request.getPassword().getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 72) {
       throw new com.blockchaincb.demo.exception.ApiException(
           400, "Mat khau vuot qua 72 byte UTF-8");
@@ -70,10 +70,7 @@ public class AuthService {
     doctor.setLicenseNumber(request.getLicenseNumber());
     doctor.setLicenseNo(request.getLicenseNumber());
     doctor.setHospital(request.getHospital());
-
-    // Tuong thich tam thoi voi schema hien tai
     doctor.setPassword(hashedPassword);
-
     // 6. Trang thai cho Admin duyet
     doctor.setStatus("PENDING");
     doctor.setApprovalStatus("PENDING");

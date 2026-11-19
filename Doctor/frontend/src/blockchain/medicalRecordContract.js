@@ -15,20 +15,28 @@ export function clients() {
 }
 export function watchWallet(onChange) {
   const provider = typeof window !== 'undefined' ? window.ethereum : null;
-  provider?.on?.('accountsChanged', onChange); provider?.on?.('chainChanged', onChange);
-  return () => { provider?.removeListener?.('accountsChanged', onChange); provider?.removeListener?.('chainChanged', onChange); };
+  const accounts = addresses => onChange({ type: 'accountsChanged', addresses });
+  const chain = chainId => onChange({ type: 'chainChanged', chainId });
+  provider?.on?.('accountsChanged', accounts); provider?.on?.('chainChanged', chain);
+  return () => { provider?.removeListener?.('accountsChanged', accounts); provider?.removeListener?.('chainChanged', chain); };
 }
-export async function connectDoctorWallet() {
+export async function connectDoctorWallet({ requestAccess = true } = {}) {
   const { walletClient, publicClient } = clients();
   if (await walletClient.getChainId() !== sepolia.id) throw new Error('Sai mạng. Hãy chọn Ethereum Sepolia (11155111) trong MetaMask.');
-  const [address] = await walletClient.requestAddresses();
+  const [address] = await (requestAccess ? walletClient.requestAddresses() : walletClient.getAddresses());
   if (!address) throw new Error('Không lấy được tài khoản MetaMask.');
-  const doctorRole = await publicClient.readContract({ address: CONTRACT_ADDRESS, abi, functionName: 'DOCTOR_ROLE' });
-  const hasDoctorRole = await publicClient.readContract({ address: CONTRACT_ADDRESS, abi, functionName: 'hasRole', args: [doctorRole, address] });
-  return { address, chainId: sepolia.id, hasDoctorRole };
+  // Contract availability/role is independent of proving wallet ownership off-chain.
+  try {
+    const doctorRole = await publicClient.readContract({ address: CONTRACT_ADDRESS, abi, functionName: 'DOCTOR_ROLE' });
+    const hasDoctorRole = await publicClient.readContract({ address: CONTRACT_ADDRESS, abi, functionName: 'hasRole', args: [doctorRole, address] });
+    return { address, chainId: sepolia.id, hasDoctorRole };
+  } catch {
+    return { address, chainId: sepolia.id, hasDoctorRole: null };
+  }
 }
 export async function linkDoctorWallet(address, stillCurrent = () => true) {
   const { walletClient } = clients(); const config = await anchorApi.config();
+  if (config.walletLinkPolicy !== 'PENDING_APPROVED_V1') throw Object.assign(new Error('Backend cần khởi động lại để hỗ trợ liên kết ví PENDING.'), { code: 'WALLET_BACKEND_OUTDATED' });
   if (config.domain !== window.location.host) throw new Error('Domain ký không khớp trang hiện tại. Kiểm tra DOCTOR_WALLET_DOMAIN.');
   if (await walletClient.getChainId() !== sepolia.id) throw new Error('Cần chọn mạng Sepolia trước khi ký.');
   const [account] = await walletClient.getAddresses();
@@ -37,6 +45,8 @@ export async function linkDoctorWallet(address, stillCurrent = () => true) {
   if (!stillCurrent()) throw new Error('Ví hoặc mạng đã đổi. Kết nối lại.');
   const signature = await walletClient.signMessage({ account: address, message: challenge.message });
   if (!stillCurrent()) throw new Error('Ví hoặc mạng đã đổi. Không sử dụng chữ ký của phiên cũ.');
+  const [currentAccount] = await walletClient.getAddresses();
+  if (await walletClient.getChainId() !== sepolia.id || currentAccount?.toLowerCase() !== address.toLowerCase() || !stillCurrent()) throw new Error('Ví hoặc mạng đã đổi sau khi ký. Kết nối lại và ký challenge mới.');
   return anchorApi.verify(challenge.challengeId, signature);
 }
 export async function anchorVersion({ id, number, linkedWallet, onHash, stillCurrent = () => true }) {

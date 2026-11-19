@@ -26,7 +26,10 @@ public class SecurityConfig {
         .authorizeHttpRequests(
             a ->
                 a.requestMatchers(
-                        HttpMethod.POST, "/api/auth/doctor/register", "/api/auth/doctor/login")
+                        HttpMethod.POST, "/api/auth/doctor/register", "/api/auth/doctor/login",
+                        "/api/auth/doctor/register/encrypted", "/api/auth/doctor/login/encrypted")
+                    .permitAll()
+                    .requestMatchers(HttpMethod.GET, "/api/auth/doctor/encryption-challenge")
                     .permitAll()
                     .requestMatchers("/api/doctor/**")
                     .hasRole("DOCTOR")
@@ -35,9 +38,12 @@ public class SecurityConfig {
         .exceptionHandling(
             e ->
                 e.authenticationEntryPoint(
-                        (req, res, ex) -> SecurityErrors.write(res, 401, "Can xac thuc"))
+                        (req, res, ex) ->
+                            SecurityErrors.write(
+                                res, 401, "Can xac thuc", "AUTHENTICATION_REQUIRED"))
                     .accessDeniedHandler(
-                        (req, res, ex) -> SecurityErrors.write(res, 403, "Khong du quyen")))
+                        (req, res, ex) ->
+                            SecurityErrors.write(res, 403, "Khong du quyen", "ACCESS_DENIED")))
         .addFilterBefore(
             new JwtAuthenticationFilter(jwt, identities),
             UsernamePasswordAuthenticationFilter.class)

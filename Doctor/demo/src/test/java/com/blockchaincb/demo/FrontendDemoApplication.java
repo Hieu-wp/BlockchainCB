@@ -43,6 +43,7 @@ public class FrontendDemoApplication {
           p.put("doctor.storage.local-enabled", "true");
           p.put("doctor.storage.local-root", "./target/frontend-demo-files");
           p.put("debug", "false");
+          p.put("doctor.integration.shared-grants-enabled", "false");
           p.put("logging.level.org.springframework", "WARN");
           p.put("logging.level.org.hibernate", "WARN");
           p.put("logging.level.com.blockchaincb", "INFO");

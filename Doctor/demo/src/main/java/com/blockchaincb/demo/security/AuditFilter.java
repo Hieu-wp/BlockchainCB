@@ -31,7 +31,7 @@ public class AuditFilter extends OncePerRequestFilter {
     try {
       audit.record(actor.userId(), req.getMethod(), resource, "ATTEMPT");
     } catch (RuntimeException unavailable) {
-      SecurityErrors.write(res, 503, "Nhat ky tam thoi khong kha dung");
+      SecurityErrors.write(res, 503, "Nhat ky tam thoi khong kha dung", "AUDIT_UNAVAILABLE");
       return;
     }
     var buffered = new ContentCachingResponseWrapper(res);
@@ -51,7 +51,7 @@ public class AuditFilter extends OncePerRequestFilter {
       } catch (RuntimeException unavailable) {
         buffered.resetBuffer();
         buffered.setStatus(503);
-        SecurityErrors.write(buffered, 503, "Nhat ky tam thoi khong kha dung");
+        SecurityErrors.write(buffered, 503, "Nhat ky tam thoi khong kha dung", "AUDIT_UNAVAILABLE");
       }
       buffered.copyBodyToResponse();
     }

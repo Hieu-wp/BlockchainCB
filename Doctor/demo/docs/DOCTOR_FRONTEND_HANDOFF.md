@@ -1,5 +1,7 @@
 # Bàn giao React Frontend Doctor
 
+> C?p nh?t Doctor?Patient 18/11/2026: xem [DOCTOR_PATIENT_INTEGRATION.md](DOCTOR_PATIENT_INTEGRATION.md) v? feature flag ngu?n quy?n public, API xin quy?n v? gi?i h?n b?nh ?n chung. C?c k?t qu? test b?n d??i c? th? l? k?t qu? l?ch s? c?a phi?n tr??c.
+
 Ngày 16/11/2026. Source: `Doctor/frontend`. React + Vite + React Router + Fetch, giao diện tiếng Việt.
 Hoàn thành source và kiểm thử với Java/H2 cách ly; **chưa xác nhận tích hợp Supabase/Patient/Admin production**.
 Không đổi Controller, DTO hay Security Java production. Không áp dụng migration, không ghi Supabase, không commit/push.

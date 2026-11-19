@@ -1,5 +1,7 @@
 # Doctor Blockchain integration — bàn giao 17/11/2026
 
+> C?p nh?t Doctor?Patient 18/11/2026: xem [DOCTOR_PATIENT_INTEGRATION.md](DOCTOR_PATIENT_INTEGRATION.md) v? feature flag ngu?n quy?n public, API xin quy?n v? gi?i h?n b?nh ?n chung. C?c k?t qu? test b?n d??i c? th? l? k?t qu? l?ch s? c?a phi?n tr??c.
+
 ## 1. Phạm vi và kết luận
 
 Hoàn thành source Java/React và kiểm thử local với H2/RPC giả lập. **Chưa hoàn thành xác minh live Sepolia,
@@ -68,7 +70,9 @@ Frontend:
 
 ## 4. Luồng liên kết ví
 
-1. JWT xác định User/Doctor; Doctor phải APPROVED và enabled.
+1. JWT xác định User/Doctor; Doctor enabled và có approval PENDING hoặc APPROVED được liên kết ví.
+   REJECTED/BLOCKED, sai role, trạng thái không hợp lệ hoặc disabled bị từ chối. Chứng minh sở hữu ví
+   không yêu cầu DOCTOR_ROLE và không thay thế phê duyệt hành nghề.
 2. POST challenge với address. Backend lock User, kiểm tra ví trùng, tạo nonce ngẫu nhiên32 byte và TTL5 phút.
 3. Message chứa domain cố định từ cấu hình, URI, chain ID, User/Doctor identity, mục đích LINK_DOCTOR_WALLET_ONLY,
    địa chỉ, nonce, challenge ID và expiry. Không lấy domain từ header client tùy ý.
@@ -184,7 +188,8 @@ Tất cả dùng JWT và Security hiện có; không nới permitAll.
 
 | Method | URL | Input / output |
 |---|---|---|
-| GET | /api/doctor/blockchain/config | enabled, chainId, contractAddress, domain (không có RPC URL) |
+| GET | /api/doctor/blockchain/config | enabled, chainId, contractAddress, domain, walletLinkPolicy (không có RPC URL) |
+| GET | /api/doctor/wallet | Ví của Doctor đăng nhập: walletAddress,verified,chainId,verifiedAt; trường users.wallet_address riêng lẻ không đủ để verified=true |
 | POST | /api/doctor/wallet/challenges | {address} → challengeId,message,expiresAt |
 | POST | /api/doctor/wallet/verify | {challengeId,signature} → walletAddress,chainId,verifiedAt |
 | POST | /api/doctor/records/{id}/versions/{number}/anchor-payload | Không body → recordKey,patientWallet,versionNumber,contentHash,previousHash,contractAddress,chainId,doctorWallet,attemptId |
@@ -227,7 +232,7 @@ Không cung cấp DROP TABLE tự động; proof/receipt có thể là dữ li�
 | DOCTOR_API_TARGET | Vite proxy target, mặc định loopback8080; dùng8081 cho fixture demo |
 
 Không có private-key/deployer-key env cần cho Doctor Backend. Không nhét SEPOLIA_RPC_URL có API key vào VITE_*.
-Tắt blockchain bằng gate vẫn cho phép test xác minh chữ ký off-chain nếu schema đã có và Doctor APPROVED.
+Tắt blockchain bằng gate vẫn cho phép xác minh chữ ký off-chain nếu schema đã có và Doctor PENDING/APPROVED hợp lệ.
 
 ## 12. Chạy local và kiểm thử
 
@@ -298,7 +303,7 @@ Không gọi luồng production với proof Patient fixture.
 - https://viem.sh/docs/contract/writeContract
 - Skill Hardhat/viem trong blockchain/.agents/skills được áp dụng cho build/test local.
 
-## 16. Kết quả đã chạy trong phiên triển khai
+## 16. Kết quả phiên triển khai ban đầu 17/11/2026
 
 | Kiểm tra | Kết quả thực tế |
 |---|---|
@@ -329,3 +334,187 @@ Các nhóm file tạo/sửa để review:
 - Tài liệu/SQL: tài liệu này, `sql/PROPOSED_blockchain_v2.sql`, `sql/READ_ONLY_blockchain_v2_preflight.sql`.
 
 Không sửa source Solidity, module Ignition, Hardhat tests hoặc source Admin/Patient. Không stage, commit hoặc push.
+
+## 17. Sửa luồng liên kết ví trước phê duyệt — 18/11/2026
+
+Nguyên nhân được tái hiện bằng test HTTP/H2 trước sửa: POST wallet/challenges của Doctor PENDING trả403,
+body `message=Bac si chua duoc phe duyet`. Cả challenge() và verify() trong WalletLinkService gọi
+DoctorIdentityService.approved(). JWT/SecurityConfig đã cho PENDING xác thực; điểm chặn là policy trong Service.
+
+Đã tách `DoctorPolicy.requireWalletLink()` và `DoctorIdentityService.walletLinkAllowed()` cho PENDING/APPROVED.
+`approved()` vẫn giữ kiểm tra APPROVED cho bệnh án, payload, submit và mọi kiểm tra quyền hiện có.
+GET `/api/doctor/wallet` chỉ đọc proof của principal hiện tại; không nhận userId/doctorId từ client.
+UI gọi endpoint này để phân biệt địa chỉ đã lưu với proof, không suy luận từ địa chỉ MetaMask.
+Sau chữ ký thành công, Profile gọi lại `/api/doctor/me`; không tự set approval hoặc DOCTOR_ROLE.
+Lỗi đọc role qua RPC không chặn ký challenge off-chain; luồng anchor vẫn kiểm role/consent nghiêm ngặt.
+
+| File sửa/thêm trong bản sửa | Hàm / tác động |
+|---|---|
+| security/DoctorPolicy.java | requireWalletLink: chỉ PENDING/APPROVED, giữ requireApproved |
+| security/DoctorIdentityService.java | account kiểm principal; walletLinkAllowed tách khỏi approved |
+| blockchain/WalletLinkService.java | challenge/verify dùng policy mới; status đọc proof hiện hành |
+| blockchain/BlockchainController.java | GET wallet đọc proof của Doctor đang đăng nhập |
+| frontend/src/App.jsx | Profile truyền approvalStatus; onLinked gọi refresh từ Backend |
+| frontend/src/blockchain/DoctorWalletPanel.jsx | Ba trạng thái độc lập, thông báo chờ Admin, chặn sai ví/trạng thái |
+| frontend/src/blockchain/anchorApi.js | wallet GET và thông báo lỗi wallet |
+| frontend/src/blockchain/medicalRecordContract.js | connectDoctorWallet trả role unknown khi RPC đọc lỗi, vẫn cho chứng minh sở hữu |
+| DemoApplicationTests.java, WalletLinkServiceTest.java, DoctorWalletPolicyTest.java (mới) | HTTP/H2 và policy/proof regression tests |
+| App.test.jsx, medicalRecordContract.test.js, DoctorWalletPanel.test.jsx (mới) | React integration/component/adapter tests |
+| docs/DOCTOR_BLOCKCHAIN_INTEGRATION.md | Bổ sung báo cáo và hướng dẫn này; mục16 giữ kết quả lịch sử |
+
+Workflow: đăng ký PENDING → đăng nhập → Hồ sơ cá nhân → kết nối và ký → Backend xác minh/lưu ví →
+Admin xét duyệt/cấp role theo quy trình nhóm → Doctor APPROVED mới dùng nghiệp vụ; grantWrite và DB consent vẫn bắt buộc để anchor.
+Liên kết ví không gửi bất kỳ giao dịch nào.
+
+### Điểm tích hợp Admin còn thiếu trong workspace
+
+Workspace được kiểm tra chỉ có Doctor và blockchain; không có source Backend/Frontend Admin hoặc Patient.
+Script `blockchain/scripts/grantAdminRole.ts` có sẵn trước bản sửa không phải luồng xét duyệt Doctor/đọc proof từ Backend;
+không sửa hay chạy script này. Không có endpoint `/api/admin/...` hiện hành để nối vào an toàn.
+
+DTO proof hiện có qua GET `/api/doctor/wallet` phục vụ **chính Doctor đăng nhập**, không dùng JWT Doctor để gọi thay Admin.
+Để làm danh sách xét duyệt, module Admin cần endpoint được bảo vệ bằng danh tính/role ADMIN của họ,
+trả `doctorId,userId,walletAddress,walletVerified,verifiedAt,chainId,approvalStatus`.
+Nguồn dữ liệu đã sẵn sàng trong `users` + `doctors` + `doctor_backend.wallet_bindings`;
+Admin phải lấy địa chỉ từ proof khớp account, không lấy địa chỉ tự nhập làm nguồn cấp DOCTOR_ROLE.
+
+Truy vấn SELECT tham khảo cho Backend Admin (bind `:doctorId`; chưa chạy trên Supabase):
+
+```sql
+SELECT d.id AS doctor_id, u.id AS user_id,
+       b.address AS wallet_address, b.chain_id, b.verified_at, d.approval_status
+FROM public.doctors d
+JOIN public.users u ON u.id = d.user_id
+JOIN doctor_backend.wallet_bindings b ON b.user_id = u.id
+WHERE d.id = :doctorId
+  AND u.role = 'DOCTOR' AND u.enabled = TRUE
+  AND d.status <> 'BLOCKED' AND d.approval_status IN ('PENDING','APPROVED')
+  AND lower(u.wallet_address) = b.address
+  AND b.chain_id = 11155111 AND b.proof_method = 'PERSONAL_SIGN'
+  AND b.verified_at IS NOT NULL;
+```
+
+Endpoint Admin và giao dịch grantRole của Admin **chưa được tích hợp/kiểm thử** vì module không có trong checkout.
+Không thêm API Admin vào Doctor với policy JWT Doctor hoặc nới permitAll để vượt ranh giới module.
+
+### Thử trên website
+
+1. Khởi động lại Java bản đã sửa và chạy Vite như hướng dẫn frontend handoff. Dùng đúng Backend/proxy,
+   port5173; DOCTOR_WALLET_DOMAIN phải bằng host trang đang mở, ví dụ localhost:5173 (khác127.0.0.1:5173).
+2. Đăng nhập tài khoản Doctor PENDING hiện có. Vào **Hồ sơ cá nhân**; không đăng ký lại tài khoản trùng.
+3. Chọn Sepolia trong MetaMask, chọn ví EOA của chính Doctor, bấm **Kết nối MetaMask**.
+   Chưa có DOCTOR_ROLE vẫn được bấm ký; đây chưa phải bằng chứng sở hữu.
+4. Bấm **Ký challenge và liên kết ví**, đọc đúng domain/chain/mục đích rồi ký. Đây là personal_sign,
+   không phải giao dịch trả gas, không cần cung cấp private key/seed phrase cho website.
+5. DevTools Network kỳ vọng challenge POST200 → verify POST200 → me GET200 → wallet GET200
+   (wallet GET có thể lặp do refresh). wallet trả verified=true, chainId11155111, verifiedAt có giá trị;
+   me vẫn approvalStatus=PENDING. Ví lưu xuất hiện và khi role=false sẽ báo đang chờ Admin cấp quyền Blockchain.
+6. Đăng xuất/đăng nhập lại: ví và proof vẫn đọc từ Backend. Menu nghiệp vụ chưa mở cho PENDING.
+7. Admin thực hiện phần xét duyệt/cấp role qua module của nhóm bằng ví quản trị an toàn. Doctor bấm kiểm tra trạng thái,
+   kết nối lại MetaMask để đọc role mới. Không tự đổi DB hoặc gọi grantRole từ Doctor.
+
+Bản sửa này **không cần migration SQL mới**. Các bảng wallet_bindings/wallet_challenges của migration v2 trước
+phải tồn tại sẵn. Nếu thiếu, DB owner vẫn cần review migration v2 như mục10; không tự chạy production.
+Không cần bật hai gate Blockchain hoặc RPC Backend chỉ để liên kết ví.
+
+### Kiểm thử bản sửa
+
+- Trước sửa: test H2 tái hiện403 và đúng message tại WalletLinkService (1/1 PASS với kỳ vọng lỗi cũ).
+- Sau sửa: Maven verify **97/97 PASS**, 0 failures/errors/skipped, compile và đóng gói thành công.
+- React **40/40 PASS** trong5 test files; build PASS, còn cảnh báo bundle638,03 kB.
+- Java thêm test policy, proof metadata, HTTP PENDING, chặn BLOCKED/disabled/REJECTED/sai role,
+  kiểm quyền lại lúc verify, JWT, challenge chủ khác, chữ ký sai/hết hạn/replay, ví trùng và anchor APPROVED hồi quy.
+- React kiểm PENDING không role vẫn ký, tải lại me, dữ liệu proof độc lập, không tự cấp role,
+  sai mạng/ví, đổi account, lỗi ký/challenge/tài khoản và không gọi API bệnh án cho PENDING.
+- Không chạy lại Hardhat vì không sửa Solidity/ABI/Hardhat. Không gọi Supabase hoặc giao dịch Sepolia thật.
+- Các thay đổi AuthController/AuthService/application.properties, phần chú thích/định dạng App.jsx/App.test.jsx
+  và script grantAdminRole có sẵn trước phiên sửa được giữ lại; không ghi đè hoặc đưa vào commit.
+
+## 18. Chẩn đoán lỗi 403 còn xuất hiện — 18/11/2026
+
+### Những gì đã kiểm chứng và chưa thể kết luận
+
+- Source hiện tại: `WalletLinkService.challenge()` và `verify()` đều gọi `walletLinkAllowed()`, không gọi approved().
+  Policy cho PENDING/APPROVED liên kết ví, không đổi điều kiện APPROVED của nghiệp vụ bệnh án/anchor.
+- `walletError()` trước bản bổ sung này quy mọi403 chưa có mã nhận diện sang thông báo tài khoản bị khóa/vô hiệu hóa.
+  Vì vậy thông báo trên UI **không phải bằng chứng** rằng users.enabled=false hoặc Doctor BLOCKED.
+- Backend Doctor cổng8080 (PID31264 tại lúc kiểm tra) khởi động lúc20:38:36, trước lần compile sửa policy lúc20:47–20:51.
+  Main class của process là DemoApplication. Đây là dấu hiệu runtime có thể chưa nạp bản sửa;
+  chưa xác minh hot reload hay classpath chính xác, nên không kết luận chắc chắn đó là nguyên nhân403 của tài khoản thật.
+- GET không JWT tới `/api/doctor/wallet` trực tiếp8080 và qua proxy5173 đều trả401, body `Can xac thuc`.
+  Kết nối Backend/proxy hoạt động lúc kiểm tra; không tái hiện ECONNREFUSED.
+- Người dùng cung cấp log Vite cũ ECONNREFUSED và Unexpected token trong App.jsx, chưa có response403 của phiên đăng nhập.
+  App.jsx hiện build thành công. Chưa xác định request thật bị từ chối tại config, challenge hay verify;
+  không đọc JWT/chữ ký từ trình duyệt và không thử ghi vào Supabase để suy đoán.
+
+### Bổ sung để lần thử tiếp theo xác định đúng lỗi
+
+- ApiException có mã lỗi độc lập; GlobalExceptionHandler giữ status/message và thêm code khi có.
+- DoctorPolicy/DoctorIdentityService trả mã cụ thể; điều kiện cho phép/từ chối giữ nguyên.
+- JwtAuthenticationFilter giữ nguyên kiểm JWT, truyền mã nguyên nhân thay vì xóa chi tiết thành một lỗi tài khoản chung.
+- SecurityErrors serialize JSON đúng escaping; SecurityConfig vẫn bảo vệ `/api/doctor/**` bằng role DOCTOR,
+  chỉ bổ sung code cho401/403, không thêm permitAll.
+- BlockchainController.config() thêm `walletLinkPolicy=PENDING_APPROVED_V1` cho client kiểm tương thích.
+  Frontend thiếu marker sẽ dừng trước ký và yêu cầu khởi động lại đúng Backend.
+  Marker chỉ là thông tin phiên bản, không phải bằng chứng cấp quyền; server vẫn kiểm danh tính/trạng thái ở từng API.
+- api.js đọc code riêng, hỗ trợ một số message legacy được liệt kê sẵn, giữ path/method/status cho UI;
+  không đưa body lỗi tùy ý/HTML/SQL ra thông báo.
+- anchorApi.walletError() hiển thị đúng bước, HTTP status và mã lỗi được nhận diện.403 không rõ mã được mô tả trung lập.
+- DoctorWalletPanel tự đọc lại account/chain/role bằng getAddresses khi accountsChanged/chainChanged,
+  không mở popup xin quyền/ký chỉ vì event; xóa địa chỉ cũ trước khi tải lại và không chấp nhận kết quả đã lỗi thời.
+- medicalRecordContract.js kiểm lại account/chain sau ký trước khi gửi verify, kể cả khi event provider đến muộn.
+  Backend vẫn là bên xác minh chữ ký, nonce, ownership và lưu wallet binding.
+
+| HTTP / code | Ý nghĩa và cách xử lý |
+|---|---|
+| WALLET_BACKEND_OUTDATED (client) | Config không có marker mới: dừng Java cũ, chạy lại đúng Doctor/demo, tải lại trang/đăng nhập |
+| 401 AUTHENTICATION_REQUIRED / TOKEN_INVALID | Chưa đăng nhập hoặc JWT không còn hợp lệ |
+| 403 ACCOUNT_DISABLED | users.enabled=false |
+| 403 DOCTOR_BLOCKED | doctors.status hoặc approval_status là BLOCKED |
+| 403 ACCOUNT_ROLE_INVALID | User hiện không có role DOCTOR |
+| 403 DOCTOR_PROFILE_MISSING / DOCTOR_PROFILE_INVALID / DOCTOR_IDENTITY_MISMATCH | Hồ sơ hoặc quan hệ User/Doctor không hợp lệ |
+| 403 DOCTOR_APPROVAL_INVALID | Trạng thái xét duyệt không được hệ thống nhận diện |
+| 403 WALLET_LINK_NOT_ALLOWED | Trạng thái không cho liên kết ví, ví dụ REJECTED |
+| 403 DOCTOR_APPROVAL_REQUIRED từ wallet (legacy) | Backend vẫn yêu cầu duyệt cho bước wallet; kiểm runtime/khởi động lại đúng bản sửa |
+| 403 không có code nhận diện | Chưa xác định nguyên nhân; lấy Network response theo từng bước, không suy ra bị khóa |
+| 400 INVALID_SIGNATURE | Chữ ký không đúng ví/challenge |
+| 409 CHALLENGE_USED_OR_EXPIRED / WALLET_ALREADY_LINKED | Challenge hết hạn/đã dùng hoặc ví thuộc tài khoản khác |
+
+Thông báo ví sẽ ghi rõ ví dụ `Tạo challenge · HTTP 403 · ACCOUNT_DISABLED: ...` hoặc
+`Xác minh chữ ký · HTTP 403: ...`, giúp phân biệt API lỗi mà không log JWT, signature hay payload.
+
+### Khởi động lại và thử đúng bản build
+
+1. Dừng phiên Spring Boot đang chạy trong VS Code bằng nút Stop/terminal của chính phiên đó.
+   Không chỉ tải lại website và không dừng hàng loạt process Java.
+2. Chạy lại Doctor/demo với cấu hình DB/JWT đang dùng. Maven verify đã biên dịch/đóng gói bản mới;
+   nếu chạy JAR, dùng đúng `Doctor/demo/target/demo-0.0.1-SNAPSHOT.jar`.
+   Giữ ddl-auto=validate/sql.init.mode=never. Không đổi schema hoặc role để xử lý403.
+3. Vite đang chạy nhận HMR; Ctrl+F5 và đăng nhập lại. Nếu Vite đã dừng, chạy `npm.cmd run dev` trong Doctor/frontend.
+4. Mở Profile, kết nối Sepolia đúng ví, bấm ký challenge. GET blockchain/config phải có walletLinkPolicy mới.
+   Đặt DOCTOR_WALLET_DOMAIN trùng host website. Không cần bật Blockchain hoặc có DOCTOR_ROLE chỉ để ký.
+5. Theo Network: config200 → challenges200 → MetaMask personal_sign → verify200 → me/wallet200.
+   Kiểm me vẫn PENDING và wallet trả verified=true. Không chuyển sang nghiệp vụ bệnh án khi còn PENDING.
+6. Nếu còn403, cung cấp chỉ method/path/status/code/message của request lỗi, không chia sẻ Authorization,
+   JWT, chữ ký hoặc toàn bộ request body. Chưa có kết quả kiểm thử bằng tài khoản thật/MetaMask thật trong phiên này.
+
+Admin tiếp tục lấy ví từ proof registry đã đối chiếu với users.wallet_address (SELECT mục17).
+GET `/api/doctor/wallet` và trường `walletAddress,verified,verifiedAt,chainId` chỉ phục vụ Doctor hiện tại;
+không chia sẻ JWT Doctor cho Admin. Module Admin cần endpoint ADMIN riêng để đọc DTO proof theo doctorId.
+Không có code Admin trong checkout để thực hiện kết nối đó ở phiên này.
+
+### Kiểm thử cuối bản bổ sung
+
+- Maven verify: **98/98 PASS**, compile/test/đóng gói thành công,0 failures/errors/skipped.
+  H2 HTTP kiểm mã nguyên nhân ở cả challenge/verify, PENDING ký thành công nhưng vẫn bị chặn bệnh án,
+  replay/expiry/signer/ownership, profile và auth/JWT/anchor APPROVED hồi quy.
+- React: **50/50 PASS**,5 test files; production build PASS, cảnh báo JS chunk641,03 kB.
+  Bổ sung test Backend cũ, mã lỗi mới/legacy và path đúng, không lộ body lỗi máy chủ,
+  account/role tự cập nhật, sai mạng sau event, đổi ví sau ký nhưng chưa nhận event.
+- Lần chạy test React đầu phát hiện test gọi async act chưa await; đã sửa test và chạy lại toàn bộ thành công.
+- `App.jsx` không có lỗi cú pháp trong build hiện tại. Không chạy lại Hardhat do không đổi contract/ABI.
+- Không cần migration mới; không áp dụng SQL, không gửi giao dịch, không đổi phê duyệt/role thật hoặc restart process đang dùng Supabase.
+
+File thay đổi thêm so với mục17: ApiException, GlobalExceptionHandler, DoctorPolicy, DoctorIdentityService,
+SecurityErrors, JwtAuthenticationFilter, SecurityConfig, BlockchainController; frontend api.js, anchorApi.js,
+medicalRecordContract.js, DoctorWalletPanel.jsx và các test liên quan. Giữ nguyên các thay đổi người dùng đang có.

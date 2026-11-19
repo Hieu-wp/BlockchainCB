@@ -28,6 +28,54 @@ import org.springframework.test.web.servlet.*;
 @ActiveProfiles("test")
 @org.springframework.context.annotation.Import(DemoApplicationTests.IsolatedDatabase.class)
 class DemoApplicationTests {
+  @Autowired com.blockchaincb.demo.security.AuthPayloadService authEncryption;
+
+  com.blockchaincb.demo.security.AuthPayloadService.Challenge authChallenge(String purpose) throws Exception {
+    var response=mvc.perform(get("/api/auth/doctor/encryption-challenge").param("purpose",purpose))
+        .andExpect(status().isOk()).andExpect(header().string("Cache-Control","no-store"))
+        .andExpect(jsonPath("$.publicKey.d").doesNotExist()).andReturn();
+    return tools.jackson.databind.json.JsonMapper.builder().build().readValue(
+        response.getResponse().getContentAsString(), com.blockchaincb.demo.security.AuthPayloadService.Challenge.class);
+  }
+
+  String authEnvelope(com.blockchaincb.demo.security.AuthPayloadService.Challenge c, java.util.Map<String,Object> body) throws Exception {
+    return "{\"payload\":\""+com.blockchaincb.demo.security.AuthPayloadServiceTest.encrypt(c,body)+"\"}";
+  }
+
+  @Test void encryptedAuthRegistersAndLogsInUsingExistingDoctorRules() throws Exception {
+    var registration=java.util.Map.<String,Object>of("fullName","Encrypted Doctor","email","encrypted@example.test",
+        "password","Abc@123456","licenseNumber","ENC-TEST","hospital","Fixture Hospital","specialtyId",2);
+    mvc.perform(post("/api/auth/doctor/register/encrypted").contentType(MediaType.APPLICATION_JSON)
+        .content(authEnvelope(authChallenge("register"),registration)))
+        .andExpect(status().isOk()).andExpect(jsonPath("$.approvalStatus").value("PENDING"))
+        .andExpect(jsonPath("$.password").doesNotExist());
+    mvc.perform(post("/api/auth/doctor/login/encrypted").contentType(MediaType.APPLICATION_JSON)
+        .content(authEnvelope(authChallenge("login"),java.util.Map.of("email","encrypted@example.test","password","Abc@123456"))))
+        .andExpect(status().isOk()).andExpect(jsonPath("$.token").isString())
+        .andExpect(jsonPath("$.approvalStatus").value("PENDING")).andExpect(jsonPath("$.password").doesNotExist());
+  }
+
+  @Test void encryptedAuthConsumesFailedLoginAndRejectsPlaintextOnNewEndpoint() throws Exception {
+    register("encrypted-bad@example.test");
+    var body=authEnvelope(authChallenge("login"),java.util.Map.of("email","encrypted-bad@example.test","password","Wrong-password!"));
+    mvc.perform(post("/api/auth/doctor/login/encrypted").contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isUnauthorized());
+    mvc.perform(post("/api/auth/doctor/login/encrypted").contentType(MediaType.APPLICATION_JSON).content(body))
+        .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("AUTH_ENVELOPE_INVALID"));
+    mvc.perform(post("/api/auth/doctor/login/encrypted").contentType(MediaType.APPLICATION_JSON)
+        .content("{\"email\":\"encrypted-bad@example.test\",\"password\":\"Wrong-password!\"}")).andExpect(status().isBadRequest());
+  }
+
+  @Test void encryptedAuthStillBlocksDisabledAccountsAndInvalidCredentials() throws Exception {
+    register("encrypted-disabled@example.test");
+    db.update("UPDATE public.users SET enabled=false WHERE email='encrypted-disabled@example.test'");
+    mvc.perform(post("/api/auth/doctor/login/encrypted").contentType(MediaType.APPLICATION_JSON)
+        .content(authEnvelope(authChallenge("login"),java.util.Map.of("email","encrypted-disabled@example.test","password","Abc@123456"))))
+        .andExpect(status().isForbidden());
+    mvc.perform(post("/api/auth/doctor/login/encrypted").contentType(MediaType.APPLICATION_JSON)
+        .content(authEnvelope(authChallenge("login"),java.util.Map.of("email","not-an-email","password","x"))))
+        .andExpect(status().isBadRequest());
+  }
+
   @org.springframework.test.context.bean.override.mockito.MockitoBean
   com.blockchaincb.demo.blockchain.AnchorGateway anchorGateway;
 
@@ -47,6 +95,7 @@ class DemoApplicationTests {
   // Highest precedence: tests cannot use DB_PASSWORD or an inherited external JDBC URL.
   @DynamicPropertySource
   static void isolated(DynamicPropertyRegistry r) {
+    r.add("doctor.integration.shared-grants-enabled", () -> false);
     r.add(
         "spring.datasource.url", () -> "jdbc:h2:mem:doctor_test;MODE=PostgreSQL;DB_CLOSE_DELAY=-1");
     r.add("spring.datasource.username", () -> "sa");
@@ -718,6 +767,14 @@ class DemoApplicationTests {
   record WalletFixture(String address, String challengeId, String signature) {}
 
   WalletFixture linkFixture(Actor actor) throws Exception {
+    var wallet = challengeFixture(actor);
+    verifyWallet(actor, wallet)
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.walletAddress").value(wallet.address()));
+    return wallet;
+  }
+
+  WalletFixture challengeFixture(Actor actor) throws Exception {
     var keys = org.web3j.crypto.Keys.createEcKeyPair();
     String address = "0x" + org.web3j.crypto.Keys.getAddress(keys);
     var response =
@@ -738,14 +795,20 @@ class DemoApplicationTests {
     System.arraycopy(sig.getS(), 0, out, 32, 32);
     out[64] = sig.getV()[0];
     String signature = org.web3j.utils.Numeric.toHexString(out);
-    mvc.perform(
-            post("/api/doctor/wallet/verify")
-                .header("Authorization", "Bearer " + actor.token())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"challengeId\":\"" + id + "\",\"signature\":\"" + signature + "\"}"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.walletAddress").value(address));
     return new WalletFixture(address, id, signature);
+  }
+
+  ResultActions verifyWallet(Actor actor, WalletFixture wallet) throws Exception {
+    return mvc.perform(
+        post("/api/doctor/wallet/verify")
+            .header("Authorization", "Bearer " + actor.token())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(
+                "{\"challengeId\":\""
+                    + wallet.challengeId()
+                    + "\",\"signature\":\""
+                    + wallet.signature()
+                    + "\"}"));
   }
 
   @Test
@@ -771,20 +834,182 @@ class DemoApplicationTests {
   }
 
   @Test
-  void pendingDoctorCannotLinkWalletOrPrepareAnchor() throws Exception {
-    register("pending-chain@example.test");
+  void walletProofUserAddressAndConsumedNonceRollbackTogether() throws Exception {
+    var actor = approved("atomic-wallet@example.test");
+    var challenge = challengeFixture(actor);
+    // Isolated H2 constraint intentionally fails the final users flush, AFTER binding was saved.
+    db.execute(
+        "ALTER TABLE public.users ADD CONSTRAINT fixture_no_wallet CHECK(wallet_address IS NULL)");
+    try {
+      verifyWallet(actor, challenge).andExpect(status().isConflict());
+      assertEquals(
+          0,
+          db.queryForObject("SELECT count(*) FROM doctor_backend.wallet_bindings", Integer.class));
+      assertEquals(
+          0,
+          db.queryForObject(
+              "SELECT count(*) FROM public.users WHERE wallet_address IS NOT NULL", Integer.class));
+      assertNull(
+          db.queryForObject(
+              "SELECT consumed_at FROM doctor_backend.wallet_challenges WHERE id=?",
+              java.sql.Timestamp.class,
+              challenge.challengeId()));
+    } finally {
+      db.execute("ALTER TABLE public.users DROP CONSTRAINT fixture_no_wallet");
+    }
+  }
+
+  @Test
+  void pendingDoctorLinksWalletButCannotUseMedicalOrAnchorApis() throws Exception {
+    long id = register("pending-chain@example.test");
     String token = login("pending-chain@example.test");
+    var actor = new Actor(id, token);
+    mvc.perform(get("/api/doctor/blockchain/config").header("Authorization", "Bearer " + token))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.walletLinkPolicy").value("PENDING_APPROVED_V1"));
+    var wallet = linkFixture(actor);
+    mvc.perform(get("/api/doctor/me").header("Authorization", "Bearer " + token))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.walletAddress").value(wallet.address()))
+        .andExpect(jsonPath("$.approvalStatus").value("PENDING"));
+    mvc.perform(get("/api/doctor/wallet").header("Authorization", "Bearer " + token))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.verified").value(true))
+        .andExpect(jsonPath("$.chainId").value(11155111))
+        .andExpect(jsonPath("$.verifiedAt").isNotEmpty());
+    for (String path : List.of("/patients", "/records", "/records/1", "/records/1/versions"))
+      mvc.perform(get("/api/doctor" + path).header("Authorization", "Bearer " + token))
+          .andExpect(status().isForbidden());
     mvc.perform(
-            post("/api/doctor/wallet/challenges")
+            post("/api/doctor/records")
                 .header("Authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"address\":\"0x" + "1".repeat(40) + "\"}"))
+                .content(content(1, "Denied")))
+        .andExpect(status().isForbidden());
+    mvc.perform(
+            post("/api/doctor/records/1/versions")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"expectedVersion\":1,\"content\":" + content(1, "Denied") + "}"))
         .andExpect(status().isForbidden());
     mvc.perform(
             post("/api/doctor/records/1/versions/1/anchor-payload")
                 .header("Authorization", "Bearer " + token))
         .andExpect(status().isForbidden());
     org.mockito.Mockito.verifyNoInteractions(anchorGateway);
+  }
+
+  @Test
+  void walletEndpointsRequireJwtAndRejectInvalidTokens() throws Exception {
+    for (String header : List.of("", "Bearer invalid")) {
+      mvc.perform(
+              post("/api/doctor/wallet/challenges")
+                  .header("Authorization", header)
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content("{\"address\":\"0x" + "1".repeat(40) + "\"}"))
+          .andExpect(status().isUnauthorized());
+      mvc.perform(get("/api/doctor/wallet").header("Authorization", header))
+          .andExpect(status().isUnauthorized());
+    }
+  }
+
+  @Test
+  void anonymousWalletRequestsIncludeAuthenticationCode() throws Exception {
+    mvc.perform(get("/api/doctor/wallet"))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"));
+    mvc.perform(get("/api/doctor/wallet").header("Authorization", "Bearer invalid"))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.code").value("TOKEN_INVALID"));
+  }
+
+  @Test
+  void blockedDisabledRejectedWrongRoleAndUnknownStateCannotChallengeOrVerify() throws Exception {
+    long id = register("restricted-wallet@example.test");
+    var actor = new Actor(id, login("restricted-wallet@example.test"));
+    var challenge = challengeFixture(actor);
+    for (var change :
+        java.util.Map.of(
+                "UPDATE public.doctors SET status='BLOCKED'", "DOCTOR_BLOCKED",
+                "UPDATE public.doctors SET approval_status='BLOCKED'", "DOCTOR_BLOCKED",
+                "UPDATE public.doctors SET approval_status='REJECTED'", "WALLET_LINK_NOT_ALLOWED",
+                "UPDATE public.doctors SET approval_status='UNKNOWN'", "DOCTOR_APPROVAL_INVALID",
+                "UPDATE public.users SET enabled=false", "ACCOUNT_DISABLED",
+                "UPDATE public.users SET role='PATIENT'", "ACCOUNT_ROLE_INVALID")
+            .entrySet()) {
+      db.update("UPDATE public.doctors SET status='PENDING',approval_status='PENDING'");
+      db.update("UPDATE public.users SET enabled=true,role='DOCTOR'");
+      db.update(change.getKey());
+      mvc.perform(
+              post("/api/doctor/wallet/challenges")
+                  .header("Authorization", "Bearer " + actor.token())
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content("{\"address\":\"" + challenge.address() + "\"}"))
+          .andExpect(status().isForbidden())
+          .andExpect(jsonPath("$.code").value(change.getValue()));
+      verifyWallet(actor, challenge)
+          .andExpect(status().isForbidden())
+          .andExpect(jsonPath("$.code").value(change.getValue()));
+    }
+    assertEquals(
+        0, db.queryForObject("SELECT count(*) FROM doctor_backend.wallet_bindings", Integer.class));
+    assertNull(
+        db.queryForObject(
+            "SELECT consumed_at FROM doctor_backend.wallet_challenges WHERE id=?",
+            java.sql.Timestamp.class,
+            challenge.challengeId()));
+    org.mockito.Mockito.verifyNoInteractions(anchorGateway);
+  }
+
+  @Test
+  void pendingCannotUseAnotherUsersChallengeOrStealTheirWallet() throws Exception {
+    long first = register("first-wallet@example.test");
+    var owner = new Actor(first, login("first-wallet@example.test"));
+    var challenge = challengeFixture(owner);
+    long second = register("second-wallet@example.test");
+    var other = new Actor(second, login("second-wallet@example.test"));
+    verifyWallet(other, challenge)
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.message").value("CHALLENGE_NOT_OWNED"));
+    verifyWallet(owner, challenge).andExpect(status().isOk());
+    mvc.perform(
+            post("/api/doctor/wallet/challenges")
+                .header("Authorization", "Bearer " + other.token())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"address\":\"" + challenge.address() + "\"}"))
+        .andExpect(status().isConflict());
+    assertEquals(
+        1, db.queryForObject("SELECT count(*) FROM doctor_backend.wallet_bindings", Integer.class));
+  }
+
+  @Test
+  void pendingInvalidExpiredAndReplayedSignaturesAreRejected() throws Exception {
+    long id = register("invalid-wallet@example.test");
+    var actor = new Actor(id, login("invalid-wallet@example.test"));
+    var challenge = challengeFixture(actor);
+    verifyWallet(
+            actor,
+            new WalletFixture(challenge.address(), challenge.challengeId(), "0x" + "0".repeat(130)))
+        .andExpect(status().isBadRequest());
+    db.update(
+        "UPDATE doctor_backend.wallet_challenges SET expires_at=? WHERE id=?",
+        java.sql.Timestamp.from(Instant.now().minusSeconds(1)),
+        challenge.challengeId());
+    verifyWallet(actor, challenge).andExpect(status().isConflict());
+    var linked = linkFixture(actor);
+    verifyWallet(actor, linked).andExpect(status().isConflict());
+    org.mockito.Mockito.verifyNoInteractions(anchorGateway);
+  }
+
+  @Test
+  void savedAddressWithoutProofIsNotReportedAsVerified() throws Exception {
+    long id = register("legacy-wallet@example.test");
+    String token = login("legacy-wallet@example.test");
+    db.update("UPDATE public.users SET wallet_address=?", "0x" + "1".repeat(40));
+    mvc.perform(get("/api/doctor/wallet").header("Authorization", "Bearer " + token))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.verified").value(false))
+        .andExpect(jsonPath("$.verifiedAt").isEmpty());
   }
 
   @Test

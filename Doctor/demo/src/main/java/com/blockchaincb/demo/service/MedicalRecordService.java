@@ -23,6 +23,7 @@ public class MedicalRecordService {
   private final AttachmentService attachments;
   private final HashService hash;
   private final com.blockchaincb.demo.blockchain.AnchorAttemptRepository anchorAttempts;
+  private final com.blockchaincb.demo.shared.SharedIntegrationSettings integration;
 
   public MedicalRecordService(
       MedicalRecordRepository records,
@@ -31,7 +32,8 @@ public class MedicalRecordService {
       PatientAccessPolicy access,
       AttachmentService attachments,
       HashService hash,
-      com.blockchaincb.demo.blockchain.AnchorAttemptRepository anchorAttempts) {
+      com.blockchaincb.demo.blockchain.AnchorAttemptRepository anchorAttempts,
+      com.blockchaincb.demo.shared.SharedIntegrationSettings integration) {
     this.records = records;
     this.versions = versions;
     this.identities = identities;
@@ -39,6 +41,7 @@ public class MedicalRecordService {
     this.attachments = attachments;
     this.hash = hash;
     this.anchorAttempts = anchorAttempts;
+    this.integration = integration;
   }
 
   private Instant now() {
@@ -47,6 +50,7 @@ public class MedicalRecordService {
 
   private MedicalRecord allowed(DoctorPrincipal actor, Long id, PatientAccessPolicy.Action action) {
     identities.approved(actor);
+    integration.requireLegacyRecords();
     var r = records.findById(id).orElseThrow(() -> new ApiException(404, "Khong tim thay ho so"));
     access.require(actor.doctorId(), r.getPatientId(), action);
     return r;
@@ -60,6 +64,7 @@ public class MedicalRecordService {
 
   public MedicalRecordResponse create(DoctorPrincipal actor, MedicalRecordRequest req) {
     identities.approved(actor);
+    integration.requireLegacyRecords();
     access.require(actor.doctorId(), req.patientId(), PatientAccessPolicy.Action.READ);
     access.require(actor.doctorId(), req.patientId(), PatientAccessPolicy.Action.CREATE);
     var r = new MedicalRecord();
@@ -157,6 +162,7 @@ public class MedicalRecordService {
   public Page<MedicalRecordResponse> patientRecords(
       DoctorPrincipal actor, Long patient, Pageable page) {
     identities.approved(actor);
+    integration.requireLegacyRecords();
     access.require(actor.doctorId(), patient, PatientAccessPolicy.Action.READ);
     return records
         .forPatient(patient, page)
@@ -165,6 +171,7 @@ public class MedicalRecordService {
 
   public Page<MedicalRecordResponse> history(DoctorPrincipal actor, Long patient, Pageable page) {
     identities.approved(actor);
+    integration.requireLegacyRecords();
     return records
         .history(actor.doctorId(), patient, now(), page)
         .map(

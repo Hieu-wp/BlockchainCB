@@ -18,6 +18,9 @@ public class GlobalExceptionHandler {
 
   @ExceptionHandler(ApiException.class)
   ResponseEntity<?> api(ApiException e) {
+    if (e.getCode() != null)
+      return ResponseEntity.status(e.getStatus())
+          .body(Map.of("status", e.getStatus(), "code", e.getCode(), "message", e.getMessage()));
     return error(e.getStatus(), e.getMessage());
   }
 

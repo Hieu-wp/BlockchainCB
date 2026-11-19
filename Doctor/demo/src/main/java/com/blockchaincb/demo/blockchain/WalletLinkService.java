@@ -37,13 +37,37 @@ public class WalletLinkService {
 
   public record Linked(String walletAddress, long chainId, Instant verifiedAt) {}
 
+  public record WalletStatus(
+      String walletAddress, boolean verified, Long chainId, Instant verifiedAt) {}
+
+  @Transactional(readOnly = true)
+  public WalletStatus status(DoctorPrincipal actor) {
+    var d = identities.account(actor);
+    String saved = d.getUser().getWalletAddress();
+    var proof = bindings.findById(actor.userId());
+    boolean verified =
+        saved != null
+            && proof.isPresent()
+            && proof.get().address.equalsIgnoreCase(saved)
+            && proof.get().chainId == ChainSettings.CHAIN
+            && proof.get().verifiedAt != null
+            && "PERSONAL_SIGN".equals(proof.get().proofMethod);
+    return new WalletStatus(
+        saved,
+        verified,
+        verified ? proof.get().chainId : null,
+        verified ? proof.get().verifiedAt : null);
+  }
+
   public Challenge challenge(DoctorPrincipal actor, String address) {
-    var d = identities.approved(actor);
+    var d = identities.walletLinkAllowed(actor);
     var user =
         users
             .lockAccount(actor.userId())
             .orElseThrow(() -> new ApiException(403, "ACCOUNT_MISSING"));
     String wallet = ChainSettings.address(address);
+    if (status(actor).verified() && wallet.equalsIgnoreCase(user.getWalletAddress()))
+      throw new ApiException(409, "WALLET_ALREADY_VERIFIED");
     bindings
         .findById(user.getId())
         .ifPresent(
@@ -85,7 +109,7 @@ public class WalletLinkService {
   }
 
   public Linked verify(DoctorPrincipal actor, String id, String signature) {
-    identities.approved(actor);
+    identities.walletLinkAllowed(actor);
     var user =
         users
             .lockAccount(actor.userId())
